@@ -70,13 +70,13 @@ MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
 
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", None)
 
-http_client = httpx.Client(verify=False)
+http_client = httpx.Client(verify=False, timeout=300.0)
 
 base_client = OpenAI(
     base_url="https://router.huggingface.co/v1",
     api_key=HF_TOKEN,
     http_client=http_client,
-    timeout=120.0,
+    timeout=300.0,
 )
 
 client = instructor.from_openai(base_client, mode=instructor.Mode.JSON)
@@ -101,7 +101,7 @@ def query_huggingface(prompt, model=MODEL_NAME, language="en"):
             max_tokens=8192,
             temperature=0.3,
             top_p=0.9,
-            max_retries=3,
+            max_retries=5,
         )
         
         return response.model_dump() if response else None
