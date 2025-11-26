@@ -28,25 +28,10 @@ class Exercise(BaseModel):
     repetitions: str = Field(description="Number of sets and reps (e.g., '3 sets of 10')")
     videoUrl: str = Field(description="YouTube video URL for demonstration")
 
-class TrainingSession(BaseModel):
-    day: int = Field(ge=1, le=7, description="Day of the week (1-7, Monday-Sunday)")
-    title: str = Field(description="Session title")
-    duration: str = Field(description="Session duration (e.g., '45 min')")
-    exercises: List[str] = Field(description="List of exercises for this session")
-    notes: str | None = Field(default=None, description="Optional notes for the session")
-
-class TrainingWeek(BaseModel):
-    weekNumber: int = Field(ge=1, description="Week number in the plan")
-    focus: str = Field(description="Main focus of this week (e.g., 'Building endurance')")
-    sessions: List[TrainingSession] = Field(description="Training sessions for this week")
-    milestone: str | None = Field(default=None, description="Optional milestone for this week")
-
 class TrainingPlan(BaseModel):
-    duration: str = Field(description="Total plan duration (e.g., '4 weeks', '8 weeks')")
     goal: str = Field(description="Main goal of the training plan")
-    weeks: List[TrainingWeek] = Field(min_length=2, max_length=4, description="Weekly training schedule (2-4 weeks for beginners)")
-    equipment: List[str] = Field(description="Required equipment")
-    progressionTips: List[str] = Field(min_length=3, max_length=5, description="Tips for progressing in the plan")
+    equipment: List[str] = Field(description="Required equipment for this sport")
+    progressionTips: List[str] = Field(min_length=3, max_length=5, description="Tips for progressing in the sport")
 
 class SportAlternative(BaseModel):
     sport: str = Field(description="Alternative sport name")
@@ -66,7 +51,7 @@ class SportRecommendation(BaseModel):
     alternatives: List[SportAlternative] = Field(min_length=2, max_length=3, description="2-3 alternative sports")
     trainingPlan: TrainingPlan = Field(description="Detailed training plan for beginners")  
 
-MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
+MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
 
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", None)
 
@@ -226,31 +211,13 @@ CRITICAL INSTRUCTIONS:
 4. Preferred Tone: {profile.get('preferredTone', 'encouraging')}
 5. Learning Style: {profile.get('learningStyle', 'visual')}
 
-MANDATORY - You MUST provide:
-✅ Main sport recommendation with score, reason, explanation
-✅ 5 benefits
-✅ 4 precautions
-✅ 3 exercises with name, description, duration, repetitions, videoUrl
-✅ 2-3 ALTERNATIVE SPORTS (alternatives field) - REQUIRED:
-   * Each with: sport name, score (0-100), reason, 3-5 benefits, 2-4 precautions
-   * Example alternatives: if main sport is Swimming, alternatives could be Aqua Aerobics, Water Polo, Rowing
-✅ COMPLETE TRAINING PLAN (trainingPlan field) - REQUIRED:
-   * duration: "2 weeks" or "4 weeks"
-   * goal: aligned with user objectives
-   * weeks: Array of 2-4 weeks, each containing:
-     - weekNumber: 1, 2, 3, 4
-     - focus: "Building foundation", "Increasing intensity", etc.
-     - sessions: 3-4 sessions per week with:
-       · day: 1-7 (1=Monday, 7=Sunday)
-       · title: "Beginner session", "Endurance training", etc.
-       · duration: "30 min", "45 min", etc.
-       · exercises: ["Exercise 1", "Exercise 2", "Exercise 3"]
-       · notes: optional tips
-     - milestone: optional achievement ("Complete first full session")
-   * equipment: ["Item 1", "Item 2"]
-   * progressionTips: 3-5 tips for improvement
-
-IMPORTANT: The response MUST include both 'alternatives' and 'trainingPlan' fields or it will be rejected and retried.
+CRITICAL: 
+- benefits MUST be an array of strings: ["string1", "string2"]
+- precautions MUST be an array of strings: ["string1", "string2"]  
+- equipment MUST be an array of strings
+- progressionTips MUST be an array of 3-5 strings
+- DO NOT write "alternatives": [...], "alternatives": [...] multiple times - use ONE alternatives array!
+- trainingPlan should have: goal, equipment, progressionTips (NO duration, NO weeks)
 
 START your response with {{ and END with }}"""
     
