@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tibg-sport-backend-dotnet
+    runtime: dotnet
+    buildCommand: dotnet publish tibg-sport-backend/tibg-sport-backend.csproj -c Release -o ./publish
+    startCommand: dotnet ./publish/tibg-sport-backend.dll
+    envVars:
+      - key: HuggingFace__ApiKey
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:$PORT
