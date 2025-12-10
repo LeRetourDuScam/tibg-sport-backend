@@ -57,11 +57,6 @@ if (app.Environment.IsDevelopment())
 // Use CORS
 app.UseCors("AllowAll");
 
-if (!app.Environment.IsProduction())
-{
-    app.UseHttpsRedirection();
-}
-
 app.UseAuthorization();
 
 app.MapControllers();
