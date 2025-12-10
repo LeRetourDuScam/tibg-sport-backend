@@ -1,11 +1,12 @@
 services:
   - type: web
     name: tibg-sport-backend
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 300 --workers 1 --threads 2 --worker-class sync --bind 0.0.0.0:$PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: HUGGINGFACE_TOKEN
+      - key: HuggingFace__ApiKey
         sync: false
-      - key: PORT
-        value: 10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:5000

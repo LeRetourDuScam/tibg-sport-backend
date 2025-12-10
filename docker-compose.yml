@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - HuggingFace__ApiKey=${HUGGINGFACE_TOKEN}
+      - HuggingFace__ModelName=Qwen/Qwen2.5-7B-Instruct
+      - ASPNETCORE_ENVIRONMENT=Production
+    env_file:
+      - .env
