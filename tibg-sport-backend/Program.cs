@@ -1,7 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using TIBG.API.Core.DataAccess;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory
+});
+
+// Disable file watching in production to avoid inotify issues on Render
+builder.Configuration.Sources
+    .OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>()
+    .ToList()
+    .ForEach(s => s.ReloadOnChange = false);
 
 // Add services to the container.
 builder.Services.AddControllers()
