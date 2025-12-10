@@ -26,11 +26,6 @@ WORKDIR /app
 # Copy published app
 COPY --from=build /app/publish .
 
-# Expose port
-EXPOSE 5000
-
-# Set environment variables
-ENV ASPNETCORE_URLS=http://+:5000
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 # Run the application
