@@ -6,7 +6,7 @@ WORKDIR /src
 COPY ["tibg-sport-backend/tibg-sport-backend.csproj", "tibg-sport-backend/"]
 COPY ["TIBG.Models/TIBG.Core.Models.csproj", "TIBG.Models/"]
 COPY ["TIBG.Core/TIBG.API.Core.csproj", "TIBG.Core/"]
-COPY ["TIBG.Entities/TIBG.API.Entities.csproj", "TIBG.Entities/"]
+COPY ["TIBG.Contracts/TIBG.Contracts.csproj", "TIBG.Contracts/"]
 
 # Restore dependencies
 RUN dotnet restore "tibg-sport-backend/tibg-sport-backend.csproj"
