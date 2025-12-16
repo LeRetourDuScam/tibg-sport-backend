@@ -177,76 +177,76 @@ namespace TIBG.API.Core.DataAccess
             var supportSystem = profile.SupportSystem ?? "not specified";
 
             return $@"You are an expert in sports recommendation. Analyze this comprehensive profile and recommend ONE sport that perfectly matches this person.
+                PHYSICAL PROFILE:
+                Age: {profile.Age ?? 0} years | Gender: {profile.Gender ?? "N/A"}
+                Height: {profile.Height ?? 0}cm | Weight: {profile.Weight ?? 0}kg | BMI: {bmi:F1}
+                Leg Length: {legLength}cm | Arm Length: {armLength}cm | Waist: {waistSize}cm
 
-PHYSICAL PROFILE:
-Age: {profile.Age ?? 0} years | Gender: {profile.Gender ?? "N/A"}
-Height: {profile.Height ?? 0}cm | Weight: {profile.Weight ?? 0}kg | BMI: {bmi:F1}
-Leg Length: {legLength}cm | Arm Length: {armLength}cm | Waist: {waistSize}cm
+                FITNESS & HEALTH:
+                Fitness Level: {profile.FitnessLevel ?? "beginner"} | Activity Level: {profile.ActivityLevel ?? "sedentary"}
+                Exercise Frequency: {profile.ExerciseFrequency ?? "never"}
+                Health Issues: {healthText}
 
-FITNESS & HEALTH:
-Fitness Level: {profile.FitnessLevel ?? "beginner"} | Activity Level: {profile.ActivityLevel ?? "sedentary"}
-Exercise Frequency: {profile.ExerciseFrequency ?? "never"}
-Health Issues: {healthText}
+                GOALS & MOTIVATION:
+                Main Goal: {mainGoal}
+                Specific Goals: {specificGoals}
+                Motivations: {motivations}
+                Fears/Concerns: {fears}
 
-GOALS & MOTIVATION:
-Main Goal: {mainGoal}
-Specific Goals: {specificGoals}
-Motivations: {motivations}
-Fears/Concerns: {fears}
+                AVAILABILITY & LIFESTYLE:
+                Available Time: {availableTime} | Preferred Time: {preferredTime} | Days/Week: {availableDays}
+                Work Type: {workType} | Sleep Quality: {sleepQuality} | Stress Level: {stressLevel}
+                Lifestyle: {lifestyle}
 
-AVAILABILITY & LIFESTYLE:
-Available Time: {availableTime} | Preferred Time: {preferredTime} | Days/Week: {availableDays}
-Work Type: {workType} | Sleep Quality: {sleepQuality} | Stress Level: {stressLevel}
-Lifestyle: {lifestyle}
+                PREFERENCES:
+                Exercise Preferences: {exercisePreferences}
+                Exercise Aversions: {exerciseAversions}
+                Location: {profile.LocationPreference ?? "any"} | Team/Solo: {profile.TeamPreference ?? "flexible"}
+                Equipment Available: {equipmentAvailable}
+                Music: {musicPreference} | Social: {socialPreference}
 
-PREFERENCES:
-Exercise Preferences: {exercisePreferences}
-Exercise Aversions: {exerciseAversions}
-Location: {profile.LocationPreference ?? "any"} | Team/Solo: {profile.TeamPreference ?? "flexible"}
-Equipment Available: {equipmentAvailable}
-Music: {musicPreference} | Social: {socialPreference}
+                EXPERIENCE:
+                Practiced Sports: {practisedSports}
+                Favorite Activity: {favoriteActivity}
+                Past Experience: {pastExperience}
+                Success Factors: {successFactors}
 
-EXPERIENCE:
-Practiced Sports: {practisedSports}
-Favorite Activity: {favoriteActivity}
-Past Experience: {pastExperience}
-Success Factors: {successFactors}
+                CHALLENGES:
+                Primary Challenges: {challenges}
+                Support System: {supportSystem}
 
-CHALLENGES:
-Primary Challenges: {challenges}
-Support System: {supportSystem}
+                CRITICAL INSTRUCTIONS:
+                1. Analyze ALL the information above to make the BEST recommendation
+                2. Consider physical metrics, health issues, goals, lifestyle, preferences, and experience
+                3. IMPORTANT: ALL text content MUST be written in this language: ""{profile.Language}""
+                   - Sport name, reason, explanation, benefits, precautions, exercise names/descriptions
+                   - For example: if language is ""pt"" → ""Natação"" not ""Swimming""
+                   - if ""fr"" → ""Natation"", if ""es"" → ""Natación"", if ""de"" → ""Schwimmen""
+                   - Only JSON keys stay in English
+                4. Preferred Tone: {profile.PreferredTone ?? "encouraging"}
+                5. Learning Style: {profile.LearningStyle ?? "visual"}
 
-CRITICAL INSTRUCTIONS:
-1. Analyze ALL the information above to make the BEST recommendation
-2. Consider physical metrics, health issues, goals, lifestyle, preferences, and experience
-3. IMPORTANT: ALL text content MUST be written in this language: ""{profile.Language}""
-   - Sport name, reason, explanation, benefits, precautions, exercise names/descriptions
-   - For example: if language is ""pt"" → ""Natação"" not ""Swimming""
-   - if ""fr"" → ""Natation"", if ""es"" → ""Natación"", if ""de"" → ""Schwimmen""
-   - Only JSON keys stay in English
-4. Preferred Tone: {profile.PreferredTone ?? "encouraging"}
-5. Learning Style: {profile.LearningStyle ?? "visual"}
+                CRITICAL JSON FORMATTING:
+                - Return ONLY valid JSON, no markdown, no explanation before or after
+                - The main object MUST include: sport (string), score (number 0-100), reason (string), explanation (string), benefits, precautions, exercises, trainingPlan
+                - benefits MUST be an array of exactly 5 strings: [""benefit1"", ""benefit2"", ""benefit3"", ""benefit4"", ""benefit5""]
+                - precautions MUST be an array of exactly 4 strings: [""precaution1"", ""precaution2"", ""precaution3"", ""precaution4""]
+                - exercises MUST be an array of exactly 3 objects with name, description, duration, repetitions
+                - alternatives MUST be an array of 2-3 objects, each with: sport (string), score (number 0-100), benefits (array of 3-5 strings), precautions (array of 2-4 strings)
+                - trainingPlan MUST be an object with: goal (string), equipment (array of strings), progressionTips (array of 3-5 strings)
+                - ALL arrays of strings must contain actual string values, NOT nested objects
+                - Example of CORRECT alternatives format:
+                  ""alternatives"": [
+                    {{
+                      ""sport"": ""Yoga"",
+                      ""score"": 85,
+                      ""reason"": ""Great alternative"",
+                      ""benefits"": [""benefit1"", ""benefit2"", ""benefit3""],
+                      ""precautions"": [""precaution1"", ""precaution2""]
+                    }}
+                  ]
 
-CRITICAL JSON FORMATTING:
-- Return ONLY valid JSON, no markdown, no explanation before or after
-- benefits MUST be an array of exactly 5 strings: [""benefit1"", ""benefit2"", ""benefit3"", ""benefit4"", ""benefit5""]
-- precautions MUST be an array of exactly 4 strings: [""precaution1"", ""precaution2"", ""precaution3"", ""precaution4""]
-- exercises MUST be an array of exactly 3 objects with name, description, duration, repetitions, videoUrl
-- alternatives MUST be an array of 2-3 objects, each with: sport (string), score (number 0-100), reason (string), benefits (array of 3-5 strings), precautions (array of 2-4 strings)
-- trainingPlan MUST be an object with: goal (string), equipment (array of strings), progressionTips (array of 3-5 strings)
-- ALL arrays of strings must contain actual string values, NOT nested objects
-- Example of CORRECT alternatives format:
-  ""alternatives"": [
-    {{
-      ""sport"": ""Yoga"",
-      ""score"": 85,
-      ""reason"": ""Great alternative"",
-      ""benefits"": [""benefit1"", ""benefit2"", ""benefit3""],
-      ""precautions"": [""precaution1"", ""precaution2""]
-    }}
-  ]
-
-START your response with {{ and END with }}";
+                START your response with {{ and END with }}";
         }
 
         private SportRecommendation? ParseAiResponse(string aiResponse)
