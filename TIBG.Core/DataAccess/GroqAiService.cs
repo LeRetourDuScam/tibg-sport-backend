@@ -8,27 +8,27 @@ using Microsoft.Extensions.Logging;
 namespace TIBG.API.Core.DataAccess
 {
     /// <summary>
-    /// Service for communicating with Hugging Face API for sport recommendations
+    /// Service for communicating with Groq API for sport recommendations
     /// </summary>
-    public class HuggingFaceAiService : IAiRecommendationService
+    public class GroqAiService : IAiRecommendationService
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<HuggingFaceAiService> _logger;
+        private readonly ILogger<GroqAiService> _logger;
         private readonly string _apiKey;
         private readonly string _modelName;
-        private const string BaseUrl = "https://router.huggingface.co/v1/chat/completions";
+        private const string BaseUrl = "https://api.groq.com/openai/v1/chat/completions";
 
-        public HuggingFaceAiService(
+        public GroqAiService(
             HttpClient httpClient, 
             IConfiguration configuration,
-            ILogger<HuggingFaceAiService> logger)
+            ILogger<GroqAiService> logger)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _apiKey = configuration["HuggingFace:ApiKey"] ?? throw new ArgumentException("HUGGINGFACE_TOKEN not configured");
-            _modelName = configuration["HuggingFace:ModelName"] ?? "Qwen/Qwen2.5-7B-Instruct";
+            _apiKey = configuration["Groq:ApiKey"] ?? throw new ArgumentException("GROQ_API_KEY not configured");
+            _modelName = configuration["Groq:ModelName"] ?? "llama-3.3-70b-versatile";
             
-            _httpClient.Timeout = TimeSpan.FromSeconds(300);
+            _httpClient.Timeout = TimeSpan.FromSeconds(120);
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
         }
 
@@ -53,26 +53,31 @@ namespace TIBG.API.Core.DataAccess
                             content = prompt 
                         }
                     },
-                    max_tokens = 8192,
-                    temperature = 0.3,
-                    top_p = 0.9,
-                    response_format = new { type = "json_object" },
+                    max_completion_tokens = 1024,
+                    temperature = 1,
+                    top_p = 1,
+                    stream = false,
+                    response_format = new { type = "json_object" }
                 };
 
                 var json = JsonSerializer.Serialize(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
+                _logger.LogInformation("Sending request to Groq API with model: {Model}", _modelName);
+                
                 var response = await _httpClient.PostAsync(BaseUrl, content);
                 
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    _logger.LogError($"Hugging Face API error: {response.StatusCode} - {error}");
+                    _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
                     return null;
                 }
 
                 var responseText = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<HuggingFaceResponse>(responseText, new JsonSerializerOptions
+                _logger.LogDebug("Groq API response: {Response}", responseText);
+                
+                var result = JsonSerializer.Deserialize<GroqResponse>(responseText, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
@@ -90,7 +95,7 @@ namespace TIBG.API.Core.DataAccess
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting sport recommendation from Hugging Face");
+                _logger.LogError(ex, "Error getting sport recommendation from Groq");
                 return null;
             }
         }
@@ -106,7 +111,7 @@ namespace TIBG.API.Core.DataAccess
                     {
                         new { role = "user", content = "Hello" }
                     },
-                    max_tokens = 10
+                    max_completion_tokens = 10
                 };
 
                 var json = JsonSerializer.Serialize(requestBody);
@@ -117,7 +122,7 @@ namespace TIBG.API.Core.DataAccess
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking Hugging Face service availability");
+                _logger.LogError(ex, "Error checking Groq service availability");
                 return false;
             }
         }
@@ -216,6 +221,18 @@ namespace TIBG.API.Core.DataAccess
                 Support System: {supportSystem}
 
                 CRITICAL INSTRUCTIONS:
+                MEDICAL SAFETY CRITICAL:
+                1. If ANY medical red flags detected (chest pain, severe symptoms), recommend consulting a doctor IMMEDIATELY
+                2. Adapt intensity to fitness level strictly
+                3. Consider health conditions in EVERY recommendation
+                4. Never recommend exercises contraindicated for mentioned conditions
+
+                FITNESS SPECIFICITY:
+                - Consider BMI category for exercise selection
+                - Adapt volume/intensity to experience level
+                - Account for work type (sedentary = more mobility work)
+                - Use available equipment only
+                
                 1. Analyze ALL the information above to make the BEST recommendation
                 2. Consider physical metrics, health issues, goals, lifestyle, preferences, and experience
                 3. IMPORTANT: ALL text content MUST be written in this language: ""{profile.Language}""
@@ -231,7 +248,7 @@ namespace TIBG.API.Core.DataAccess
                 - The main object MUST include: sport (string), score (number 0-100), reason (string), explanation (string), benefits, precautions, exercises, trainingPlan
                 - benefits MUST be an array of exactly 5 strings: [""benefit1"", ""benefit2"", ""benefit3"", ""benefit4"", ""benefit5""]
                 - precautions MUST be an array of exactly 4 strings: [""precaution1"", ""precaution2"", ""precaution3"", ""precaution4""]
-                - exercises MUST be an array of exactly 3 objects with name, description, duration, repetitions
+                - exercises MUST be an array of exactly 3 objects with name(string), description(string), duration(string), repetitions(string)
                 - alternatives MUST be an array of 2-3 objects, each with: sport (string), score (number 0-100), benefits (array of 3-5 strings), precautions (array of 2-4 strings)
                 - trainingPlan MUST be an object with: goal (string), equipment (array of strings), progressionTips (array of 3-5 strings)
                 - ALL arrays of strings must contain actual string values, NOT nested objects
@@ -318,7 +335,7 @@ namespace TIBG.API.Core.DataAccess
             }
         }
 
-        private class HuggingFaceResponse
+        private class GroqResponse
         {
             public List<Choice>? Choices { get; set; }
         }

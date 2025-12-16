@@ -31,11 +31,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Register HttpClient for Hugging Face service
-builder.Services.AddHttpClient<IAiRecommendationService, HuggingFaceAiService>();
+builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
 
 // Register services
-builder.Services.AddScoped<IAiRecommendationService, HuggingFaceAiService>();
+builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
