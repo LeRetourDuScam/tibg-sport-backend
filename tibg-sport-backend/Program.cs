@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TIBG.API.Core.DataAccess;
+using TIBG.API.Core.Configuration;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -31,6 +32,8 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddMemoryCache();
+builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
 
 // Register services

@@ -1,9 +1,14 @@
+using System.Linq;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using TIBG.Models;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TIBG.API.Core.Configuration;
+using TIBG.Models;
 
 namespace TIBG.API.Core.DataAccess
 {
@@ -14,90 +19,85 @@ namespace TIBG.API.Core.DataAccess
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<GroqAiService> _logger;
+        private readonly IMemoryCache _cache;
+        private readonly IOptions<GroqSettings> _settings;
         private readonly string _apiKey;
         private readonly string _modelName;
-        private const string BaseUrl = "https://api.groq.com/openai/v1/chat/completions";
+        private readonly string _baseUrl;
+        private const string DefaultBaseUrl = "https://api.groq.com/openai/v1/chat/completions";
+        private const int DefaultMaxRetries = 3;
+        private const int DefaultCacheDurationMinutes = 60;
 
         public GroqAiService(
-            HttpClient httpClient, 
+            HttpClient httpClient,
             IConfiguration configuration,
-            ILogger<GroqAiService> logger)
+            ILogger<GroqAiService> logger,
+            IMemoryCache cache,
+            IOptions<GroqSettings> settings)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _apiKey = configuration["Groq:ApiKey"] ?? throw new ArgumentException("GROQ_API_KEY not configured");
-            _modelName = configuration["Groq:ModelName"] ?? "llama-3.3-70b-versatile";
-            
-            _httpClient.Timeout = TimeSpan.FromSeconds(120);
+            _cache = cache;
+            _settings = settings;
+
+            _apiKey = !string.IsNullOrWhiteSpace(_settings.Value.ApiKey)
+                ? _settings.Value.ApiKey
+                : configuration["Groq:ApiKey"] ?? throw new ArgumentException("GROQ_API_KEY not configured");
+
+            _modelName = string.IsNullOrWhiteSpace(_settings.Value.ModelName)
+                ? "llama-3.3-70b-versatile"
+                : _settings.Value.ModelName;
+
+            _baseUrl = string.IsNullOrWhiteSpace(_settings.Value.BaseUrl)
+                ? DefaultBaseUrl
+                : _settings.Value.BaseUrl;
+
+            var timeoutSeconds = _settings.Value.TimeoutSeconds > 0 ? _settings.Value.TimeoutSeconds : 120;
+            _httpClient.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
         }
 
         public async Task<SportRecommendation?> GetSportRecommendationAsync(UserProfile profile)
         {
-            try
+            var cacheKey = GenerateProfileHash(profile);
+
+            if (_cache.TryGetValue(cacheKey, out SportRecommendation? cached))
             {
-                var prompt = BuildPrompt(profile);
-                var language = profile.Language ?? "en";
+                _logger.LogInformation("Cache hit for profile {Hash}", cacheKey);
+                return cached;
+            }
 
-                var requestBody = new
+            var maxRetries = _settings.Value.MaxRetries > 0 ? _settings.Value.MaxRetries : DefaultMaxRetries;
+            var cacheDuration = _settings.Value.CacheDurationMinutes > 0 ? _settings.Value.CacheDurationMinutes : DefaultCacheDurationMinutes;
+
+            for (var attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
                 {
-                    model = _modelName,
-                    messages = new[]
+                    var result = await CallGroqApiAsync(profile);
+
+                    if (result != null)
                     {
-                        new { 
-                            role = "system", 
-                            content = $"You are an expert sports recommendation assistant. You can return any type of sport dont only do natation and cyclisme. You MUST respond ONLY with valid JSON matching the provided schema. All text content (sport names, descriptions, benefits, etc) MUST be in {language} language. Only JSON keys stay in English. Return ONLY the JSON object, no markdown, no explanation."
-                        },
-                        new { 
-                            role = "user", 
-                            content = prompt 
-                        }
-                    },
-                    max_completion_tokens = 1024,
-                    temperature = 1,
-                    top_p = 1,
-                    stream = false,
-                    response_format = new { type = "json_object" }
-                };
-
-                var json = JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                _logger.LogInformation("Sending request to Groq API with model: {Model}", _modelName);
-                
-                var response = await _httpClient.PostAsync(BaseUrl, content);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
-                    return null;
-                }
-
-                var responseText = await response.Content.ReadAsStringAsync();
-                _logger.LogDebug("Groq API response: {Response}", responseText);
-                
-                var result = JsonSerializer.Deserialize<GroqResponse>(responseText, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (result?.Choices != null && result.Choices.Count > 0)
-                {
-                    var aiResponse = result.Choices[0].Message?.Content;
-                    if (!string.IsNullOrEmpty(aiResponse))
-                    {
-                        return ParseAiResponse(aiResponse);
+                        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(cacheDuration));
                     }
-                }
 
-                return null;
+                    return result;
+                }
+                catch (HttpRequestException ex) when (attempt < maxRetries)
+                {
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    _logger.LogWarning(ex, "Groq API attempt {Attempt} failed, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    await Task.Delay(delay);
+                }
+                catch (TaskCanceledException ex) when (attempt < maxRetries)
+                {
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    _logger.LogWarning(ex, "Groq API attempt {Attempt} timed out, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    await Task.Delay(delay);
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting sport recommendation from Groq");
-                return null;
-            }
+
+            throw new GroqApiException("Failed after max retries");
         }
 
         public async Task<bool> IsServiceAvailableAsync()
@@ -117,7 +117,7 @@ namespace TIBG.API.Core.DataAccess
                 var json = JsonSerializer.Serialize(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync(BaseUrl, content);
+                var response = await _httpClient.PostAsync(_baseUrl, content);
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)
@@ -127,143 +127,155 @@ namespace TIBG.API.Core.DataAccess
             }
         }
 
+        private async Task<SportRecommendation?> CallGroqApiAsync(UserProfile profile)
+        {
+            var prompt = BuildPrompt(profile);
+            var language = profile.Language ?? "en";
+
+            var requestBody = new
+            {
+                model = _modelName,
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "system",
+                        content = $"You are an expert sports recommendation assistant. Respond with valid JSON only. All content must be in {language} language (keys stay English)."
+                    },
+                    new
+                    {
+                        role = "user",
+                        content = prompt
+                    }
+                },
+                max_completion_tokens = 1024,
+                temperature = 1,
+                top_p = 1,
+                stream = false,
+                response_format = new { type = "json_object" }
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            _logger.LogInformation("Sending request to Groq API with model: {Model}", _modelName);
+
+            var response = await _httpClient.PostAsync(_baseUrl, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
+                throw new HttpRequestException($"Groq API returned {response.StatusCode}");
+            }
+
+            var responseText = await response.Content.ReadAsStringAsync();
+
+            var result = JsonSerializer.Deserialize<GroqResponse>(responseText, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
+            if (string.IsNullOrWhiteSpace(aiResponse))
+            {
+                _logger.LogError("Groq API returned empty content");
+                throw new GroqApiException("Groq API returned empty content");
+            }
+
+            return ParseAiResponse(aiResponse);
+        }
+
         private string BuildPrompt(UserProfile profile)
         {
-            // Physical metrics
-            var heightM = (profile.Height ?? 170) / 100;
-            var bmi = (profile.Weight ?? 70) / (heightM * heightM);
-            var legLength = profile.LegLength?.ToString() ?? "N/A";
-            var armLength = profile.ArmLength?.ToString() ?? "N/A";
-            var waistSize = profile.WaistSize?.ToString() ?? "N/A";
+            var bmi = CalculateBmi(profile);
 
-            // Health conditions
-            var healthIssues = new List<string>();
-            if (profile.JointProblems) healthIssues.Add("joint problems");
-            if (profile.KneeProblems) healthIssues.Add("knee problems");
-            if (profile.BackProblems) healthIssues.Add("back problems");
-            if (profile.HeartProblems) healthIssues.Add("heart problems");
-            if (profile.HealthConditions != null) healthIssues.AddRange(profile.HealthConditions);
-            if (!string.IsNullOrEmpty(profile.OtherHealthIssues)) healthIssues.Add(profile.OtherHealthIssues);
-            if (!string.IsNullOrEmpty(profile.Injuries)) healthIssues.Add($"injuries: {profile.Injuries}");
-            if (!string.IsNullOrEmpty(profile.Allergies)) healthIssues.Add($"allergies: {profile.Allergies}");
+            var sections = new StringBuilder();
 
-            var healthText = healthIssues.Any() ? string.Join(", ", healthIssues) : "no particular health issues";
+            sections.AppendLine("=== USER PROFILE DATA ===");
+            sections.AppendLine(JsonSerializer.Serialize(new
+            {
+                physical = new
+                {
+                    profile.Age,
+                    profile.Height,
+                    profile.Weight,
+                    BMI = bmi
+                },
+                health = new
+                {
+                    profile.JointProblems,
+                    profile.KneeProblems,
+                    profile.BackProblems,
+                    profile.HeartProblems,
+                    profile.HealthConditions,
+                    profile.OtherHealthIssues,
+                    profile.Injuries,
+                    profile.Allergies
+                },
+                goals = new { profile.MainGoal, profile.SpecificGoals },
+                constraints = new
+                {
+                    profile.AvailableTime,
+                    profile.AvailableDays,
+                    profile.WorkType,
+                    profile.PreferredTime
+                }
+            }, new JsonSerializerOptions { WriteIndented = true }));
 
-            // Goals and motivations
-            var mainGoal = profile.MainGoal ?? "general fitness";
-            var specificGoals = profile.SpecificGoals != null && profile.SpecificGoals.Any() ? string.Join(", ", profile.SpecificGoals) : "none specified";
-            var motivations = profile.Motivations != null && profile.Motivations.Any() ? string.Join(", ", profile.Motivations) : "none specified";
-            var fears = profile.Fears != null && profile.Fears.Any() ? string.Join(", ", profile.Fears) : "none";
+            sections.AppendLine("\n=== TASK ===");
+            sections.AppendLine("Analyze this profile and return ONE optimal sport recommendation.");
+            sections.AppendLine($"Response MUST be in {profile.Language ?? "en"} language.");
 
-            // Lifestyle and availability
-            var availableTime = profile.AvailableTime ?? "flexible";
-            var preferredTime = profile.PreferredTime ?? "any time";
-            var availableDays = profile.AvailableDays ?? 1;
-            var workType = profile.WorkType ?? "not specified";
-            var sleepQuality = profile.SleepQuality ?? "normal";
-            var stressLevel = profile.StressLevel ?? "moderate";
-            var lifestyle = profile.Lifestyle ?? "not specified";
+            sections.AppendLine("\n=== OUTPUT SCHEMA (STRICT) ===");
+            sections.AppendLine(@"{
+              ""sport"": ""string (required)"",
+              ""score"": number 0-100 (required),
+              ""reason"": ""string min 100 chars (required)"",
+              ""explanation"": ""string min 100 chars (required)"",
+              ""benefits"": [""string"", ""string"", ""string"", ""string"", ""string""] (exactly 5),
+              ""precautions"": [""string"", ""string"", ""string"", ""string""] (exactly 4),
+              ""exercises"": [
+                {""name"": ""string"", ""description"": ""string"", ""duration"": ""string"", ""repetitions"": ""string"", ""videoUrl"": ""https://youtube.com/...""}
+              ] (exactly 3),
+              ""alternatives"": [
+                {""sport"": ""string"", ""score"": number, ""reason"": ""string"", ""benefits"": [""string"", ...], ""precautions"": [""string"", ...]}
+              ] (2-3 items),
+              ""trainingPlan"": {
+                ""goal"": ""string (required)"",
+                ""equipment"": [""string (required)"", ...],
+                ""progressionTips"": [""string (required)"", ""string (required)"", ""string (required)""]
+              }
+            }");
 
-            // Preferences
-            var exercisePreferences = profile.ExercisePreferences != null && profile.ExercisePreferences.Any() ? string.Join(", ", profile.ExercisePreferences) : "no preferences";
-            var exerciseAversions = profile.ExerciseAversions != null && profile.ExerciseAversions.Any() ? string.Join(", ", profile.ExerciseAversions) : "none";
-            var equipmentAvailable = profile.EquipmentAvailable != null && profile.EquipmentAvailable.Any() ? string.Join(", ", profile.EquipmentAvailable) : "none";
-            var musicPreference = profile.MusicPreference ?? "any";
-            var socialPreference = profile.SocialPreference ?? "flexible";
+            sections.AppendLine("\n=== MEDICAL SAFETY RULES ===");
+            if (profile.HeartProblems || profile.BackProblems || profile.JointProblems)
+            {
+                sections.AppendLine("CRITICAL: User has medical conditions. Recommend LOW-IMPACT sports only.");
+                sections.AppendLine("Avoid: High-intensity, contact sports, heavy weights, jumping.");
+                sections.AppendLine("Prefer: Swimming, walking, yoga, cycling, tai chi.");
+            }
 
-            // Experience
-            var practisedSports = profile.PractisedSports != null && profile.PractisedSports.Any() ? string.Join(", ", profile.PractisedSports) : "None";
-            var favoriteActivity = profile.FavoriteActivity ?? "not specified";
-            var pastExperience = profile.PastExperienceWithFitness ?? "beginner";
-            var successFactors = profile.SuccessFactors != null && profile.SuccessFactors.Any() ? string.Join(", ", profile.SuccessFactors) : "not specified";
+            return sections.ToString();
+        }
 
-            // Challenges and support
-            var challenges = profile.PrimaryChallenges != null && profile.PrimaryChallenges.Any() ? string.Join(", ", profile.PrimaryChallenges) : "none";
-            var supportSystem = profile.SupportSystem ?? "not specified";
+        private static double CalculateBmi(UserProfile profile)
+        {
+            if (!profile.Height.HasValue || !profile.Weight.HasValue || profile.Height.Value <= 0)
+            {
+                return 0;
+            }
 
-            return $@"You are an expert in sports recommendation. Analyze this comprehensive profile and recommend ONE sport that perfectly matches this person.
-                PHYSICAL PROFILE:
-                Age: {profile.Age ?? 0} years | Gender: {profile.Gender ?? "N/A"}
-                Height: {profile.Height ?? 0}cm | Weight: {profile.Weight ?? 0}kg | BMI: {bmi:F1}
-                Leg Length: {legLength}cm | Arm Length: {armLength}cm | Waist: {waistSize}cm
+            var heightM = profile.Height.Value / 100.0;
+            return Math.Round(profile.Weight.Value / (heightM * heightM), 1);
+        }
 
-                FITNESS & HEALTH:
-                Fitness Level: {profile.FitnessLevel ?? "beginner"} | Activity Level: {profile.ActivityLevel ?? "sedentary"}
-                Exercise Frequency: {profile.ExerciseFrequency ?? "never"}
-                Health Issues: {healthText}
-
-                GOALS & MOTIVATION:
-                Main Goal: {mainGoal}
-                Specific Goals: {specificGoals}
-                Motivations: {motivations}
-                Fears/Concerns: {fears}
-
-                AVAILABILITY & LIFESTYLE:
-                Available Time: {availableTime} | Preferred Time: {preferredTime} | Days/Week: {availableDays}
-                Work Type: {workType} | Sleep Quality: {sleepQuality} | Stress Level: {stressLevel}
-                Lifestyle: {lifestyle}
-
-                PREFERENCES:
-                Exercise Preferences: {exercisePreferences}
-                Exercise Aversions: {exerciseAversions}
-                Location: {profile.LocationPreference ?? "any"} | Team/Solo: {profile.TeamPreference ?? "flexible"}
-                Equipment Available: {equipmentAvailable}
-                Music: {musicPreference} | Social: {socialPreference}
-
-                EXPERIENCE:
-                Practiced Sports: {practisedSports}
-                Favorite Activity: {favoriteActivity}
-                Past Experience: {pastExperience}
-                Success Factors: {successFactors}
-
-                CHALLENGES:
-                Primary Challenges: {challenges}
-                Support System: {supportSystem}
-
-                CRITICAL INSTRUCTIONS:
-                MEDICAL SAFETY CRITICAL:
-                1. If ANY medical red flags detected (chest pain, severe symptoms), recommend consulting a doctor IMMEDIATELY
-                2. Adapt intensity to fitness level strictly
-                3. Consider health conditions in EVERY recommendation
-                4. Never recommend exercises contraindicated for mentioned conditions
-
-                FITNESS SPECIFICITY:
-                - Consider BMI category for exercise selection
-                - Adapt volume/intensity to experience level
-                - Account for work type (sedentary = more mobility work)
-                - Use available equipment only
-                
-                1. Analyze ALL the information above to make the BEST recommendation
-                2. Consider physical metrics, health issues, goals, lifestyle, preferences, and experience
-                3. IMPORTANT: ALL text content MUST be written in this language: ""{profile.Language}""
-                   - Sport name, reason, explanation, benefits, precautions, exercise names/descriptions
-                   - For example: if language is ""pt"" → ""Natação"" not ""Swimming""
-                   - if ""fr"" → ""Natation"", if ""es"" → ""Natación"", if ""de"" → ""Schwimmen""
-                   - Only JSON keys stay in English
-                4. Preferred Tone: {profile.PreferredTone ?? "encouraging"}
-                5. Learning Style: {profile.LearningStyle ?? "visual"}
-
-                CRITICAL JSON FORMATTING:
-                - Return ONLY valid JSON, no markdown, no explanation before or after
-                - The main object MUST include: sport (string), score (number 0-100), reason (string), explanation (string), benefits, precautions, exercises, trainingPlan
-                - benefits MUST be an array of exactly 5 strings: [""benefit1"", ""benefit2"", ""benefit3"", ""benefit4"", ""benefit5""]
-                - precautions MUST be an array of exactly 4 strings: [""precaution1"", ""precaution2"", ""precaution3"", ""precaution4""]
-                - exercises MUST be an array of exactly 3 objects with name(string), description(string), duration(string), repetitions(string)
-                - alternatives MUST be an array of 2-3 objects, each with: sport (string), score (number 0-100), benefits (array of 3-5 strings), precautions (array of 2-4 strings)
-                - trainingPlan MUST be an object with: goal (string), equipment (array of strings), progressionTips (array of 3-5 strings)
-                - ALL arrays of strings must contain actual string values, NOT nested objects
-                - Example of CORRECT alternatives format:
-                  ""alternatives"": [
-                    {{
-                      ""sport"": ""Yoga"",
-                      ""score"": 85,
-                      ""reason"": ""Great alternative"",
-                      ""benefits"": [""benefit1"", ""benefit2"", ""benefit3""],
-                      ""precautions"": [""precaution1"", ""precaution2""]
-                    }}
-                  ]
-
-                START your response with {{ and END with }}";
+        private static string GenerateProfileHash(UserProfile profile)
+        {
+            var json = JsonSerializer.Serialize(profile);
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(json));
+            return Convert.ToBase64String(hash);
         }
 
         private SportRecommendation? ParseAiResponse(string aiResponse)
