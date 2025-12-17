@@ -231,12 +231,12 @@ namespace TIBG.API.Core.DataAccess
             sections.AppendLine(@"{
               ""sport"": ""string (required)"",
               ""score"": number 0-100 (required),
-              ""reason"": ""string min 100 chars (required)"",
-              ""explanation"": ""string min 100 chars (required)"",
+              ""reason"": ""string min 100 chars max 150 chars (required)"",
+              ""explanation"": ""string min 100 chars max 150 chars (required)"",
               ""benefits"": [""string"", ""string"", ""string"", ""string"", ""string""] (exactly 5),
               ""precautions"": [""string"", ""string"", ""string"", ""string""] (exactly 4),
               ""exercises"": [
-                {""name"": ""string"", ""description"": ""string"", ""duration"": ""string"", ""repetitions"": ""string"", ""videoUrl"": ""https://youtube.com/...""}
+                {""name"": ""string"", ""description"": ""string"", ""duration"": ""string"", ""repetitions"": ""string""}
               ] (exactly 3),
               ""alternatives"": [
                 {""sport"": ""string"", ""score"": number, ""reason"": ""string"", ""benefits"": [""string"", ...], ""precautions"": [""string"", ...]}
