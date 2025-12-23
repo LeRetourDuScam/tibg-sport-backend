@@ -35,9 +35,11 @@ builder.Services.AddCors(options =>
 builder.Services.AddMemoryCache();
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
+builder.Services.AddHttpClient<IChatService, GroqChatService>();
 
 // Register services
 builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
+builder.Services.AddScoped<IChatService, GroqChatService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();

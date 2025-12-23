@@ -2,9 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TIBG.Models
 {
-    /// <summary>
-    /// Represents an exercise with detailed information
-    /// </summary>
     public class Exercise
     {
         [Required]
@@ -19,8 +16,5 @@ namespace TIBG.Models
         [Required]
         public string Repetitions { get; set; } = string.Empty;
 
-        [Required]
-        [Url]
-        public string VideoUrl { get; set; } = string.Empty;
     }
 }
