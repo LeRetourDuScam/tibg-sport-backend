@@ -22,11 +22,7 @@ namespace tibg_sport_backend.Controllers
             _logger = logger;
         }
 
-        /// <summary>
-        /// Analyzes user profile and returns sport recommendation
-        /// </summary>
-        /// <param name="profile">User profile with all relevant information</param>
-        /// <returns>Sport recommendation with exercises and training plan</returns>
+
         [HttpPost("analyze")]
         public async Task<IActionResult> AnalyzeProfile([FromBody] UserProfile profile)
         {
@@ -35,6 +31,13 @@ namespace tibg_sport_backend.Controllers
                 if (profile == null)
                 {
                     return BadRequest(new { error = "Profile data is required" });
+                }
+
+                // Validation des données
+                var validationError = ValidateUserProfile(profile);
+                if (validationError != null)
+                {
+                    return BadRequest(new { error = validationError });
                 }
 
                 _logger.LogInformation("Received profile analysis request");
@@ -59,10 +62,61 @@ namespace tibg_sport_backend.Controllers
             }
         }
 
-        /// <summary>
-        /// Health check endpoint to verify API and AI service availability
-        /// </summary>
-        /// <returns>Health status</returns>
+        private string? ValidateUserProfile(UserProfile profile)
+        {
+            if (profile.Age < 18 || profile.Age > 120)
+            {
+                return "Age must be between 18 and 120 years";
+            }
+
+            if (profile.Height < 100 || profile.Height > 250)
+            {
+                return "Height must be between 100 and 250 cm";
+            }
+
+            if (profile.Weight < 30 || profile.Weight > 300)
+            {
+                return "Weight must be between 30 and 300 kg";
+            }
+
+            if (profile.LegLength < 40 || profile.LegLength > 150)
+            {
+                return "Leg length must be between 40 and 150 cm";
+            }
+
+            if (profile.ArmLength < 40 || profile.ArmLength > 120)
+            {
+                return "Arm length must be between 40 and 120 cm";
+            }
+
+            if (profile.WaistSize < 40 || profile.WaistSize > 200)
+            {
+                return "Waist size must be between 40 and 200 cm";
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.MainGoal))
+            {
+                return "Main goal is required";
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.FitnessLevel))
+            {
+                return "Fitness level is required";
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.Gender))
+            {
+                return "Gender is required";
+            }
+
+            if (profile.AvailableDays < 0 || profile.AvailableDays > 7)
+            {
+                return "Available days must be between 1 and 7";
+            }
+
+            return null; 
+        }
+
         [HttpGet("health")]
         public async Task<IActionResult> HealthCheck()
         {

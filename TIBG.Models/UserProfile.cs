@@ -2,9 +2,7 @@ using System.Collections.Generic;
 
 namespace TIBG.Models
 {
-    /// <summary>
-    /// Represents a comprehensive user profile for sport recommendations
-    /// </summary>
+
     public class UserProfile
     {
         // Physical metrics
@@ -18,7 +16,6 @@ namespace TIBG.Models
 
         // Fitness & Health
         public string? FitnessLevel { get; set; }
-        public string? ActivityLevel { get; set; }
         public string? ExerciseFrequency { get; set; }
         public bool JointProblems { get; set; }
         public bool KneeProblems { get; set; }

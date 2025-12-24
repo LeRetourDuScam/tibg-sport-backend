@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using TIBG.API.Core.DataAccess;
 using TIBG.API.Core.Configuration;
+using TIBG.Contracts.DataAccess;
+using TIBG.ENTITIES;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -33,15 +37,47 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddMemoryCache();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 2
+            }
+        )
+    );
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Too many requests. Please wait a moment before trying again.",
+            retryAfter = 60
+        }, cancellationToken);
+    };
+});
+
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
 builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
 builder.Services.AddHttpClient<IChatService, GroqChatService>();
 
-// Register services
+builder.Services.AddDbContext<FytAiDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("PostgreSQL");
+    options.UseNpgsql(connectionString);
+});
+
 builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
 builder.Services.AddScoped<IChatService, GroqChatService>();
+builder.Services.AddScoped<IFeedbackService, FeedbackService>();
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 // Add Swagger for API documentation
@@ -60,6 +96,9 @@ if (app.Environment.IsDevelopment())
 
 // Use CORS
 app.UseCors("AllowAll");
+
+// Use Rate Limiting
+app.UseRateLimiter();
 
 app.UseAuthorization();
 
