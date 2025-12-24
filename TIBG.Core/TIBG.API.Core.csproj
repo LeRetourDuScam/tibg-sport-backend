@@ -15,7 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TIBG.Models\TIBG.Core.Models.csproj" />
     <ProjectReference Include="..\TIBG.Contracts\TIBG.Contracts.csproj" />
-	  <ProjectReference Include="..\TIBG.Entities\TIBG.ENTITIES.csproj" />
+	  <ProjectReference Include="..\TIBG.ENTITIES\TIBG.ENTITIES.csproj" />
   </ItemGroup>
 
   <ItemGroup>

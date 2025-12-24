@@ -7,6 +7,7 @@ COPY ["tibg-sport-backend/tibg-sport-backend.csproj", "tibg-sport-backend/"]
 COPY ["TIBG.Models/TIBG.Core.Models.csproj", "TIBG.Models/"]
 COPY ["TIBG.Core/TIBG.API.Core.csproj", "TIBG.Core/"]
 COPY ["TIBG.Contracts/TIBG.Contracts.csproj", "TIBG.Contracts/"]
+COPY ["TIBG.ENTITIES/TIBG.ENTITIES.csproj", "TIBG.ENTITIES/"]
 
 # Restore dependencies
 RUN dotnet restore "tibg-sport-backend/tibg-sport-backend.csproj"
