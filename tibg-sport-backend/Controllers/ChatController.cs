@@ -8,7 +8,7 @@ namespace tibg_sport_backend.Controllers
     /// Controller for chatbot endpoints
     /// </summary>
     [ApiController]
-    [Route("api")]
+    [Route("api/v1")]
     public class ChatController : ControllerBase
     {
         private readonly IChatService _chatService;

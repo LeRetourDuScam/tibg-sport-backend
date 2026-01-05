@@ -6,5 +6,6 @@ namespace TIBG.Contracts.DataAccess
     {
         Task<bool> SaveFeedbackAsync(UserFeedback feedback);
         Task<List<UserFeedback>> GetAllFeedbacksAsync();
+        Task<(List<UserFeedback> feedbacks, int totalCount)> GetPagedFeedbacksAsync(int page, int pageSize);
     }
 }

@@ -51,5 +51,29 @@ namespace TIBG.API.Core.DataAccess
                 return new List<UserFeedback>();
             }
         }
+
+        public async Task<(List<UserFeedback> feedbacks, int totalCount)> GetPagedFeedbacksAsync(int page, int pageSize)
+        {
+            try
+            {
+                var totalCount = await _dbContext.Feedbacks.CountAsync();
+                
+                var feedbacks = await _dbContext.Feedbacks
+                    .OrderByDescending(f => f.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+                
+                _logger.LogInformation("Retrieved {Count} feedbacks (page {Page} of {PageSize})", 
+                    feedbacks.Count, page, pageSize);
+                
+                return (feedbacks, totalCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving paged feedbacks from database");
+                return (new List<UserFeedback>(), 0);
+            }
+        }
     }
 }

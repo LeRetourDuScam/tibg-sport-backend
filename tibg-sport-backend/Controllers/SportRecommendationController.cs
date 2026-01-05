@@ -8,7 +8,7 @@ namespace tibg_sport_backend.Controllers
     /// Controller for sport recommendation endpoints
     /// </summary>
     [ApiController]
-    [Route("api")]
+    [Route("api/v1")]
     public class SportRecommendationController : ControllerBase
     {
         private readonly IAiRecommendationService _aiService;
@@ -31,6 +31,16 @@ namespace tibg_sport_backend.Controllers
                 if (profile == null)
                 {
                     return BadRequest(new { error = "Profile data is required" });
+                }
+
+                // Validate ModelState (checks MaxLength attributes)
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
+                    return BadRequest(new { error = "Validation failed", details = errors });
                 }
 
                 // Validation des données
@@ -131,13 +141,13 @@ namespace tibg_sport_backend.Controllers
                     services = new
                     {
                         api = "operational",
-                        huggingface = isAiAvailable ? "operational" : "unavailable"
+                        groq = isAiAvailable ? "operational" : "unavailable"
                     }
                 };
 
                 if (!isAiAvailable)
                 {
-                    _logger.LogWarning("Hugging Face service is unavailable");
+                    _logger.LogWarning("Groq service is unavailable");
                 }
 
                 return Ok(response);

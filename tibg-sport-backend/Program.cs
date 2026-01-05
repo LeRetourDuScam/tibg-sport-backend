@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory
 });
 
+
 // Disable file watching in production to avoid inotify issues on Render
 builder.Configuration.Sources
     .OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>()
@@ -28,12 +29,20 @@ builder.Services.AddControllers()
 // Configure CORS to allow requests from frontend
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("RestrictedCors", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins("http://localhost:4200", "https://tibg-sport-frontend-iy9w.onrender.com")
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
+});
+
+// Configure Response Compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
 });
 
 builder.Services.AddMemoryCache();
@@ -94,8 +103,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Use Response Compression
+app.UseResponseCompression();
+
 // Use CORS
-app.UseCors("AllowAll");
+app.UseCors("RestrictedCors");
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append("Content-Security-Policy", 
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
+    await next();
+});
 
 // Use Rate Limiting
 app.UseRateLimiter();
