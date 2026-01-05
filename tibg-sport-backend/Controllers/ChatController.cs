@@ -4,9 +4,6 @@ using TIBG.Models;
 
 namespace tibg_sport_backend.Controllers
 {
-    /// <summary>
-    /// Controller for chatbot endpoints
-    /// </summary>
     [ApiController]
     [Route("api/v1")]
     public class ChatController : ControllerBase

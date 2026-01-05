@@ -120,11 +120,11 @@ namespace TIBG.API.Core.DataAccess
             === USER CONTEXT ===
             User Profile:
             - Age: {profile.Age}, Gender: {profile.Gender}
-            - Fitness Level: {profile.FitnessLevel}
+            - Fitness Level: {profile.FitnessLevel}, Exercise Frequency: {profile.ExerciseFrequency}
             - Main Goal: {profile.MainGoal}
             - Health Concerns: {GetHealthConcerns(profile)}
-            - Available Time: {profile.AvailableTime}
-            - Preferences: {profile.LocationPreference}, {profile.SocialPreference}
+            - Available Time: {profile.AvailableTime}, Available Days: {profile.AvailableDays}/week
+            - Preferences: {profile.LocationPreference}, {profile.TeamPreference}
 
             Recommended Sport: {recommendation.Sport} (Score: {recommendation.Score}%)
             Reason: {recommendation.Reason}
@@ -143,18 +143,23 @@ namespace TIBG.API.Core.DataAccess
             - If asked about medical issues, always remind users to consult healthcare professionals
 
             === COMMUNICATION STYLE ===
-            Tone: {profile.PreferredTone ?? "Encouraging and professional"}
-            Learning Style: {profile.LearningStyle ?? "Practical with examples"}";
+            Tone: Encouraging and professional
+            Learning Style: Practical with examples";
         }
 
         private string GetHealthConcerns(UserProfile profile)
         {
             var concerns = new List<string>();
-            if (profile.JointProblems) concerns.Add("Joint problems");
-            if (profile.KneeProblems) concerns.Add("Knee problems");
-            if (profile.BackProblems) concerns.Add("Back problems");
-            if (profile.HeartProblems) concerns.Add("Heart problems");
-            if (!string.IsNullOrWhiteSpace(profile.Injuries)) concerns.Add($"Injuries: {profile.Injuries}");
+            
+            if (!string.IsNullOrWhiteSpace(profile.HealthConditions))
+            {
+                concerns.Add($"Health: {profile.HealthConditions}");
+            }
+            
+            if (!string.IsNullOrWhiteSpace(profile.Injuries))
+            {
+                concerns.Add($"Injuries: {profile.Injuries}");
+            }
             
             return concerns.Any() ? string.Join(", ", concerns) : "None reported";
         }

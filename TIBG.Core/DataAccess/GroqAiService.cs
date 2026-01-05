@@ -198,28 +198,32 @@ namespace TIBG.API.Core.DataAccess
                 physical = new
                 {
                     profile.Age,
+                    profile.Gender,
                     profile.Height,
                     profile.Weight,
                     BMI = bmi
                 },
+                fitness = new
+                {
+                    profile.FitnessLevel,
+                    profile.ExerciseFrequency
+                },
                 health = new
                 {
-                    profile.JointProblems,
-                    profile.KneeProblems,
-                    profile.BackProblems,
-                    profile.HeartProblems,
                     profile.HealthConditions,
-                    profile.OtherHealthIssues,
-                    profile.Injuries,
-                    profile.Allergies
+                    profile.Injuries
                 },
-                goals = new { profile.MainGoal, profile.SpecificGoals },
-                constraints = new
+                goals = new { profile.MainGoal },
+                availability = new
                 {
                     profile.AvailableTime,
-                    profile.AvailableDays,
-                    profile.WorkType,
-                    profile.PreferredTime
+                    profile.AvailableDays
+                },
+                preferences = new
+                {
+                    profile.LocationPreference,
+                    profile.TeamPreference,
+                    profile.PractisedSports
                 }
             }, new JsonSerializerOptions { WriteIndented = true }));
 
@@ -249,11 +253,11 @@ namespace TIBG.API.Core.DataAccess
             }");
 
             sections.AppendLine("\n=== MEDICAL SAFETY RULES ===");
-            if (profile.HeartProblems || profile.BackProblems || profile.JointProblems)
+            if (!string.IsNullOrWhiteSpace(profile.HealthConditions) || !string.IsNullOrWhiteSpace(profile.Injuries))
             {
-                sections.AppendLine("CRITICAL: User has medical conditions. Recommend LOW-IMPACT sports only.");
-                sections.AppendLine("Avoid: High-intensity, contact sports, heavy weights, jumping.");
-                sections.AppendLine("Prefer: Swimming, walking, yoga, cycling, tai chi.");
+                sections.AppendLine("IMPORTANT: User has reported health concerns or injuries.");
+                sections.AppendLine("Consider LOW-IMPACT sports and progressive intensity.");
+                sections.AppendLine("Prioritize safety and recommend medical clearance when appropriate.");
             }
 
             return sections.ToString();
@@ -261,13 +265,13 @@ namespace TIBG.API.Core.DataAccess
 
         private static double CalculateBmi(UserProfile profile)
         {
-            if (!profile.Height.HasValue || !profile.Weight.HasValue || profile.Height.Value <= 0)
+            if (profile.Height <= 0 || profile.Weight <= 0)
             {
                 return 0;
             }
 
-            var heightM = profile.Height.Value / 100.0;
-            return Math.Round(profile.Weight.Value / (heightM * heightM), 1);
+            var heightM = profile.Height / 100.0;
+            return Math.Round(profile.Weight / (heightM * heightM), 1);
         }
 
         private static string GenerateProfileHash(UserProfile profile)

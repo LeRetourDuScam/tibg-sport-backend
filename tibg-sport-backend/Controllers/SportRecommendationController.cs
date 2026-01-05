@@ -33,7 +33,7 @@ namespace tibg_sport_backend.Controllers
                     return BadRequest(new { error = "Profile data is required" });
                 }
 
-                // Validate ModelState (checks MaxLength attributes)
+                // Validate ModelState (checks Required and Range attributes automatically)
                 if (!ModelState.IsValid)
                 {
                     var errors = ModelState.Values
@@ -43,11 +43,18 @@ namespace tibg_sport_backend.Controllers
                     return BadRequest(new { error = "Validation failed", details = errors });
                 }
 
-                // Validation des données
-                var validationError = ValidateUserProfile(profile);
-                if (validationError != null)
+                // Additional sanitization for optional text fields
+                if (!string.IsNullOrWhiteSpace(profile.HealthConditions))
                 {
-                    return BadRequest(new { error = validationError });
+                    profile.HealthConditions = SanitizeInput(profile.HealthConditions);
+                }
+                if (!string.IsNullOrWhiteSpace(profile.Injuries))
+                {
+                    profile.Injuries = SanitizeInput(profile.Injuries);
+                }
+                if (!string.IsNullOrWhiteSpace(profile.PractisedSports))
+                {
+                    profile.PractisedSports = SanitizeInput(profile.PractisedSports);
                 }
 
                 _logger.LogInformation("Received profile analysis request");
@@ -72,59 +79,20 @@ namespace tibg_sport_backend.Controllers
             }
         }
 
-        private string? ValidateUserProfile(UserProfile profile)
+        /// <summary>
+        /// Sanitize user input to prevent injection attacks
+        /// </summary>
+        private static string SanitizeInput(string input)
         {
-            if (profile.Age < 18 || profile.Age > 120)
-            {
-                return "Age must be between 18 and 120 years";
-            }
+            if (string.IsNullOrWhiteSpace(input))
+                return string.Empty;
 
-            if (profile.Height < 100 || profile.Height > 250)
-            {
-                return "Height must be between 100 and 250 cm";
-            }
-
-            if (profile.Weight < 30 || profile.Weight > 300)
-            {
-                return "Weight must be between 30 and 300 kg";
-            }
-
-            if (profile.LegLength < 40 || profile.LegLength > 150)
-            {
-                return "Leg length must be between 40 and 150 cm";
-            }
-
-            if (profile.ArmLength < 40 || profile.ArmLength > 120)
-            {
-                return "Arm length must be between 40 and 120 cm";
-            }
-
-            if (profile.WaistSize < 40 || profile.WaistSize > 200)
-            {
-                return "Waist size must be between 40 and 200 cm";
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.MainGoal))
-            {
-                return "Main goal is required";
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.FitnessLevel))
-            {
-                return "Fitness level is required";
-            }
-
-            if (string.IsNullOrWhiteSpace(profile.Gender))
-            {
-                return "Gender is required";
-            }
-
-            if (profile.AvailableDays < 0 || profile.AvailableDays > 7)
-            {
-                return "Available days must be between 1 and 7";
-            }
-
-            return null; 
+            // Remove potentially dangerous characters
+            return System.Text.RegularExpressions.Regex.Replace(
+                input, 
+                @"[<>'"";(){}[\]\\]", 
+                string.Empty
+            ).Trim();
         }
 
         [HttpGet("health")]

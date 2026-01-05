@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using System.Threading.RateLimiting;
+using System.Text;
 using TIBG.API.Core.DataAccess;
 using TIBG.API.Core.Configuration;
 using TIBG.Contracts.DataAccess;
@@ -77,6 +80,32 @@ builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"
 builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
 builder.Services.AddHttpClient<IChatService, GroqChatService>();
 
+// Configure JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey must be configured");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"] ?? "FytAI",
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"] ?? "FytAI-Users",
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddDbContext<FytAiDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("PostgreSQL");
@@ -86,6 +115,8 @@ builder.Services.AddDbContext<FytAiDbContext>(options =>
 builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
 builder.Services.AddScoped<IChatService, GroqChatService>();
 builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IJwtService, JwtService>();
 
 builder.Services.AddOpenApi();
 
@@ -123,6 +154,7 @@ app.Use(async (context, next) =>
 // Use Rate Limiting
 app.UseRateLimiter();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -1,131 +1,76 @@
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace TIBG.Models
 {
-
+    /// <summary>
+    /// Simplified UserProfile with only essential fields (15 max)
+    /// All fields are required except health conditions and injuries
+    /// </summary>
     public class UserProfile
     {
-        // Physical metrics
-        public int? Age { get; set; }
+        // Physical metrics (REQUIRED)
+        [Required(ErrorMessage = "Age is required")]
+        [Range(18, 120, ErrorMessage = "Age must be between 18 and 120")]
+        public int Age { get; set; }
         
-        [MaxLength(50)]
-        public string? Gender { get; set; }
+        [Required(ErrorMessage = "Gender is required")]
+        [MaxLength(20, ErrorMessage = "Gender cannot exceed 20 characters")]
+        public string Gender { get; set; } = string.Empty;
         
-        public double? Height { get; set; }
-        public double? Weight { get; set; }
-        public double? LegLength { get; set; }
-        public double? ArmLength { get; set; }
-        public double? WaistSize { get; set; }
+        [Required(ErrorMessage = "Height is required")]
+        [Range(100, 250, ErrorMessage = "Height must be between 100 and 250 cm")]
+        public double Height { get; set; }
+        
+        [Required(ErrorMessage = "Weight is required")]
+        [Range(30, 300, ErrorMessage = "Weight must be between 30 and 300 kg")]
+        public double Weight { get; set; }
 
-        // Fitness & Health
-        [MaxLength(100)]
-        public string? FitnessLevel { get; set; }
+        // Fitness & Health (REQUIRED)
+        [Required(ErrorMessage = "Fitness level is required")]
+        [MaxLength(50, ErrorMessage = "Fitness level cannot exceed 50 characters")]
+        public string FitnessLevel { get; set; } = string.Empty;
         
-        [MaxLength(100)]
-        public string? ExerciseFrequency { get; set; }
+        [Required(ErrorMessage = "Exercise frequency is required")]
+        [MaxLength(50, ErrorMessage = "Exercise frequency cannot exceed 50 characters")]
+        public string ExerciseFrequency { get; set; } = string.Empty;
         
-        public bool JointProblems { get; set; }
-        public bool KneeProblems { get; set; }
-        public bool BackProblems { get; set; }
-        public bool HeartProblems { get; set; }
-        
-        [MaxLength(500)]
+        // Health issues (OPTIONAL - can be empty)
+        [MaxLength(500, ErrorMessage = "Health conditions cannot exceed 500 characters")]
         public string? HealthConditions { get; set; }
         
-        [MaxLength(500)]
-        public string? OtherHealthIssues { get; set; }
-        
-        [MaxLength(500)]
+        [MaxLength(500, ErrorMessage = "Injuries cannot exceed 500 characters")]
         public string? Injuries { get; set; }
-        
-        [MaxLength(500)]
-        public string? Allergies { get; set; }
 
-        // Goals & Motivation
-        [MaxLength(200)]
-        public string? MainGoal { get; set; }
-        
-        [MaxLength(1000)]
-        public string? SpecificGoals { get; set; }
-        
-        [MaxLength(1000)]
-        public string? Motivations { get; set; }
-        
-        [MaxLength(1000)]
-        public string? Fears { get; set; }
+        // Goals (REQUIRED)
+        [Required(ErrorMessage = "Main goal is required")]
+        [MaxLength(200, ErrorMessage = "Main goal cannot exceed 200 characters")]
+        public string MainGoal { get; set; } = string.Empty;
 
-        // Availability & Lifestyle
-        [MaxLength(100)]
-        public string? AvailableTime { get; set; }
+        // Availability (REQUIRED)
+        [Required(ErrorMessage = "Available time is required")]
+        [MaxLength(50, ErrorMessage = "Available time cannot exceed 50 characters")]
+        public string AvailableTime { get; set; } = string.Empty;
         
-        [MaxLength(100)]
-        public string? PreferredTime { get; set; }
-        
-        public int? AvailableDays { get; set; }
-        
-        [MaxLength(100)]
-        public string? WorkType { get; set; }
-        
-        [MaxLength(100)]
-        public string? SleepQuality { get; set; }
-        
-        [MaxLength(100)]
-        public string? StressLevel { get; set; }
-        
-        [MaxLength(500)]
-        public string? Lifestyle { get; set; }
+        [Required(ErrorMessage = "Number of available days is required")]
+        [Range(1, 7, ErrorMessage = "Available days must be between 1 and 7")]
+        public int AvailableDays { get; set; }
 
-        // Preferences
-        [MaxLength(500)]
-        public string? ExercisePreferences { get; set; }
+        // Preferences (REQUIRED)
+        [Required(ErrorMessage = "Location preference is required")]
+        [MaxLength(50, ErrorMessage = "Location preference cannot exceed 50 characters")]
+        public string LocationPreference { get; set; } = string.Empty;
         
-        [MaxLength(500)]
-        public string? ExerciseAversions { get; set; }
-        
-        [MaxLength(100)]
-        public string? LocationPreference { get; set; }
-        
-        [MaxLength(100)]
-        public string? TeamPreference { get; set; }
-        
-        [MaxLength(500)]
-        public string? EquipmentAvailable { get; set; }
-        
-        [MaxLength(100)]
-        public string? MusicPreference { get; set; }
-        
-        [MaxLength(100)]
-        public string? SocialPreference { get; set; }
+        [Required(ErrorMessage = "Team preference is required")]
+        [MaxLength(50, ErrorMessage = "Team preference cannot exceed 50 characters")]
+        public string TeamPreference { get; set; } = string.Empty;
 
-        // Experience
-        [MaxLength(500)]
+        // Experience (REQUIRED)
+        [MaxLength(500, ErrorMessage = "Practiced sports cannot exceed 500 characters")]
         public string? PractisedSports { get; set; }
-        
-        [MaxLength(200)]
-        public string? FavoriteActivity { get; set; }
-        
-        [MaxLength(100)]
-        public string? PastExperienceWithFitness { get; set; }
-        
-        [MaxLength(500)]
-        public string? SuccessFactors { get; set; }
 
-        // Challenges & Support
-        [MaxLength(500)]
-        public string? PrimaryChallenges { get; set; }
-        
-        [MaxLength(500)]
-        public string? SupportSystem { get; set; }
-
-        // Language and preferences
-        [MaxLength(10)]
+        // Language (REQUIRED)
+        [Required(ErrorMessage = "Language is required")]
+        [MaxLength(10, ErrorMessage = "Language code cannot exceed 10 characters")]
         public string Language { get; set; } = "en";
-        
-        [MaxLength(100)]
-        public string? PreferredTone { get; set; }
-        
-        [MaxLength(100)]
-        public string? LearningStyle { get; set; }
     }
 }
