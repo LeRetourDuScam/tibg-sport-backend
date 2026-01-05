@@ -426,3 +426,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/tibg-sport-backend/appsettings.json
+/tibg-sport-backend/appsettings.Development.json
+/tibg-sport-backend/appsettings.Production.json
