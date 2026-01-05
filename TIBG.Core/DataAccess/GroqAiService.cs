@@ -236,21 +236,33 @@ namespace TIBG.API.Core.DataAccess
               ""sport"": ""string (required)"",
               ""score"": number 0-100 (required),
               ""reason"": ""string min 100 chars max 150 chars (required)"",
-              ""explanation"": ""string min 100 chars max 150 chars (required)"",
-              ""benefits"": [""string"", ""string"", ""string"", ""string"", ""string""] (exactly 5),
-              ""precautions"": [""string"", ""string"", ""string"", ""string""] (exactly 4),
-              ""exercises"": [
-                {""name"": ""string"", ""description"": ""string"", ""duration"": ""string"", ""repetitions"": ""string""}
-              ] (exactly 3),
               ""alternatives"": [
-                {""sport"": ""string"", ""score"": number, ""reason"": ""string"", ""benefits"": [""string"", ...], ""precautions"": [""string"", ...]}
-              ] (2-3 items),
-              ""trainingPlan"": {
-                ""goal"": ""string (required)"",
-                ""equipment"": [""string (required)"", ...],
-                ""progressionTips"": [""string (required)"", ""string (required)"", ""string (required)""]
-              }
+                {""sport"": ""string"", ""score"": number, ""reason"": ""string""}
+              ] (2-3 items)
             }");
+
+            //""trainingPlan"": {
+            //    ""goal"": ""string(required)"",
+            //    ""durationWeeks"": number(required),
+            //    ""weeks"": [
+            //      {
+            //        ""weekNumber"": number(required),
+            //        ""focus"": ""string(required)"",
+            //        ""sessions"": [
+            //          {
+            //            ""day"": ""string(required)"",
+            //            ""type"": ""string(required)"",
+            //            ""duration"": number(required),
+            //            ""intensity"": ""string(required)"",
+            //            ""exercises"": [""string(required)""],
+            //            ""notes"": ""string(optional)""
+            //          }
+            //        ] (required)
+            //      }
+            //    ] (required),
+            //    ""equipment"": [""string(required)""](required),
+            //    ""progressionTips"": [""string(required)"", ""string(required)"", ""string(required)""](required)
+            //  }
 
             sections.AppendLine("\n=== MEDICAL SAFETY RULES ===");
             if (!string.IsNullOrWhiteSpace(profile.HealthConditions) || !string.IsNullOrWhiteSpace(profile.Injuries))
@@ -276,10 +288,41 @@ namespace TIBG.API.Core.DataAccess
 
         private static string GenerateProfileHash(UserProfile profile)
         {
-            var json = JsonSerializer.Serialize(profile);
+            var cacheKey = new
+            {
+                Version = "v2",
+                
+                Language = profile.Language ?? "en",
+                
+                profile.Age,
+                profile.Gender,
+                profile.Height,
+                profile.Weight,
+                profile.FitnessLevel,
+                profile.ExerciseFrequency,
+                profile.MainGoal,
+                profile.AvailableTime,
+                profile.AvailableDays,
+                profile.LocationPreference,
+                profile.TeamPreference,
+                
+                HealthConditionsHash = string.IsNullOrWhiteSpace(profile.HealthConditions) 
+                    ? "" 
+                    : profile.HealthConditions.GetHashCode().ToString(),
+                InjuriesHash = string.IsNullOrWhiteSpace(profile.Injuries)
+                    ? ""
+                    : profile.Injuries.GetHashCode().ToString(),
+                PractisedSportsHash = string.IsNullOrWhiteSpace(profile.PractisedSports)
+                    ? ""
+                    : profile.PractisedSports.GetHashCode().ToString()
+            };
+            
+            var json = JsonSerializer.Serialize(cacheKey);
             using var sha256 = SHA256.Create();
             var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(json));
-            return Convert.ToBase64String(hash);
+            var base64Hash = Convert.ToBase64String(hash);
+            
+            return $"v2:{profile.Language}:{base64Hash.Substring(0, 16)}";
         }
 
         private SportRecommendation? ParseAiResponse(string aiResponse)
@@ -325,12 +368,6 @@ namespace TIBG.API.Core.DataAccess
                     {
                         _logger.LogWarning($"Alternatives count is {recommendation.Alternatives?.Count ?? 0}, expected at least 2");
                     }
-
-                    if (recommendation.Exercises == null || recommendation.Exercises.Count < 3)
-                    {
-                        _logger.LogWarning($"Exercises count is {recommendation.Exercises?.Count ?? 0}, expected 3");
-                    }
-
 
                     return recommendation;
                 }

@@ -129,8 +129,6 @@ namespace TIBG.API.Core.DataAccess
             Recommended Sport: {recommendation.Sport} (Score: {recommendation.Score}%)
             Reason: {recommendation.Reason}
 
-            Key Benefits: {string.Join(", ", recommendation.Benefits.Take(3))}
-            Important Precautions: {string.Join(", ", recommendation.Precautions.Take(2))}
 
             === YOUR ROLE ===
             - Answer questions about the recommended sport and why it suits the user

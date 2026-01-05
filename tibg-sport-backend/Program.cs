@@ -112,6 +112,10 @@ builder.Services.AddDbContext<FytAiDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
+// Register Repositories
+builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
+
+// Register Services
 builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
 builder.Services.AddScoped<IChatService, GroqChatService>();
 builder.Services.AddScoped<IFeedbackService, FeedbackService>();

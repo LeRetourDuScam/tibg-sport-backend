@@ -1,13 +1,12 @@
 using System;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TIBG.Contracts.DataAccess;
 using TIBG.ENTITIES;
 using TIBG.Models;
+using BCrypt.Net;
 
 namespace TIBG.API.Core.DataAccess
 {
@@ -135,17 +134,27 @@ namespace TIBG.API.Core.DataAccess
             return await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && u.IsActive);
         }
 
+        /// <summary>
+        /// Hash password using BCrypt with automatic salt generation
+        /// </summary>
         private static string HashPassword(string password)
         {
-            using var sha256 = SHA256.Create();
-            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            return Convert.ToBase64String(hashedBytes);
+            return BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
         }
 
+        /// <summary>
+        /// Verify password against BCrypt hash
+        /// </summary>
         private static bool VerifyPassword(string password, string hash)
         {
-            var passwordHash = HashPassword(password);
-            return passwordHash == hash;
+            try
+            {
+                return BCrypt.Net.BCrypt.Verify(password, hash);
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

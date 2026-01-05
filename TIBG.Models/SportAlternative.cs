@@ -16,16 +16,6 @@ namespace TIBG.Models
         public int Score { get; set; }
 
         [Required]
-        public string Reason { get; set; } = string.Empty;
-
-        [Required]
-        [MinLength(3)]
-        [MaxLength(5)]
-        public List<string> Benefits { get; set; } = new List<string>();
-
-        [Required]
-        [MinLength(2)]
-        [MaxLength(4)]
-        public List<string> Precautions { get; set; } = new List<string>();
+        public string Reason { get; set; } = string.Empty ;
     }
 }

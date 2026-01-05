@@ -1,20 +1,21 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using Microsoft.EntityFrameworkCore;
 using TIBG.Contracts.DataAccess;
 using TIBG.Models;
-using TIBG.ENTITIES;
 
 namespace TIBG.API.Core.DataAccess
 {
+    /// <summary>
+    /// Service for feedback business logic using Repository Pattern
+    /// </summary>
     public class FeedbackService : IFeedbackService
     {
-        private readonly FytAiDbContext _dbContext; 
+        private readonly IFeedbackRepository _repository;
         private readonly ILogger<FeedbackService> _logger;
 
-        public FeedbackService(FytAiDbContext dbContext, ILogger<FeedbackService> logger)
+        public FeedbackService(IFeedbackRepository repository, ILogger<FeedbackService> logger)
         {
-            _dbContext = dbContext;
+            _repository = repository;
             _logger = logger;
         }
 
@@ -22,17 +23,16 @@ namespace TIBG.API.Core.DataAccess
         {
             try
             {
-                _dbContext.Feedbacks.Add(feedback);
-                await _dbContext.SaveChangesAsync();
+                await _repository.AddAsync(feedback);
                 
-                _logger.LogInformation("Feedback saved to database: Rating={Rating}, Sport={Sport}", 
+                _logger.LogInformation("Feedback saved successfully: Rating={Rating}, Sport={Sport}", 
                     feedback.Rating, feedback.Sport);
                 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error saving feedback to database");
+                _logger.LogError(ex, "Failed to save feedback");
                 return false;
             }
         }
@@ -41,13 +41,11 @@ namespace TIBG.API.Core.DataAccess
         {
             try
             {
-                return await _dbContext.Feedbacks
-                    .OrderByDescending(f => f.CreatedAt)
-                    .ToListAsync();
+                return await _repository.GetAllAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving feedbacks from database");
+                _logger.LogError(ex, "Error retrieving all feedbacks");
                 return new List<UserFeedback>();
             }
         }
@@ -56,22 +54,11 @@ namespace TIBG.API.Core.DataAccess
         {
             try
             {
-                var totalCount = await _dbContext.Feedbacks.CountAsync();
-                
-                var feedbacks = await _dbContext.Feedbacks
-                    .OrderByDescending(f => f.CreatedAt)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-                
-                _logger.LogInformation("Retrieved {Count} feedbacks (page {Page} of {PageSize})", 
-                    feedbacks.Count, page, pageSize);
-                
-                return (feedbacks, totalCount);
+                return await _repository.GetPagedAsync(page, pageSize);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving paged feedbacks from database");
+                _logger.LogError(ex, "Error retrieving paged feedbacks");
                 return (new List<UserFeedback>(), 0);
             }
         }
