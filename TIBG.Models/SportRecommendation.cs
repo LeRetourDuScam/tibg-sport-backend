@@ -22,8 +22,5 @@ namespace TIBG.Models
         [MinLength(2)]
         [MaxLength(3)]
         public List<SportAlternative> Alternatives { get; set; } = new List<SportAlternative>();
-
-        //[Required]
-        //public TrainingPlan TrainingPlan { get; set; } = new TrainingPlan();
     }
 }

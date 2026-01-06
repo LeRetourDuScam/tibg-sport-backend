@@ -95,6 +95,49 @@ namespace tibg_sport_backend.Controllers
             ).Trim();
         }
 
+        [HttpPost("training-plan")]
+        public async Task<IActionResult> GetTrainingPlan([FromBody] TrainingPlanRequest request)
+        {
+            try
+            {
+                if (request == null || request.Profile == null || string.IsNullOrWhiteSpace(request.Sport))
+                {
+                    return BadRequest(new { error = "Profile data and sport are required" });
+                }
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList();
+                    return BadRequest(new { error = "Validation failed", details = errors });
+                }
+
+                request.Sport = SanitizeInput(request.Sport);
+
+                _logger.LogInformation($"Received training plan request for sport: {request.Sport}");
+
+                var trainingPlan = await _aiService.GetTrainingPlanAsync(request.Profile, request.Sport);
+
+                if (trainingPlan != null)
+                {
+                    _logger.LogInformation($"Generated training plan for {request.Sport}");
+                    return Ok(trainingPlan);
+                }
+                else
+                {
+                    _logger.LogError("Failed to generate training plan");
+                    return StatusCode(500, new { error = "Failed to generate training plan. Please try again." });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating training plan");
+                return StatusCode(500, new { error = "An error occurred while generating the training plan" });
+            }
+        }
+
         [HttpGet("health")]
         public async Task<IActionResult> HealthCheck()
         {
