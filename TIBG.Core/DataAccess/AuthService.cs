@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TIBG.Contracts.DataAccess;
 using TIBG.ENTITIES;
@@ -10,43 +11,41 @@ using BCrypt.Net;
 
 namespace TIBG.API.Core.DataAccess
 {
-    /// <summary>
-    /// Authentication service for user registration and login
-    /// </summary>
     public class AuthService : IAuthService
     {
         private readonly FytAiDbContext _context;
         private readonly IJwtService _jwtService;
         private readonly ILogger<AuthService> _logger;
+        private readonly IConfiguration _configuration;
 
         public AuthService(
             FytAiDbContext context, 
             IJwtService jwtService,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            IConfiguration configuration)
         {
             _context = context;
             _jwtService = jwtService;
             _logger = logger;
+            _configuration = configuration;
         }
 
-        public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
+        public async Task<AuthResponse?> RegisterAsync(RegisterRequest request, string? ipAddress = null)
         {
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Check if user already exists
                 var existingUser = await _context.Users
                     .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
                 if (existingUser != null)
                 {
-                    _logger.LogWarning($"Registration attempt with existing email: {request.Email}");
+                    _logger.LogWarning("Registration attempt with existing email");
                     return null;
                 }
 
-                // Hash password
                 var passwordHash = HashPassword(request.Password);
 
-                // Create new user
                 var user = new User
                 {
                     Username = request.Username,
@@ -59,28 +58,34 @@ namespace TIBG.API.Core.DataAccess
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"User registered successfully: {user.Email}");
+                var accessToken = _jwtService.GenerateAccessToken(user.Id, user.Email, user.Username);
+                var refreshToken = await CreateRefreshTokenAsync(user.Id, ipAddress);
 
-                // Generate JWT token
-                var token = _jwtService.GenerateToken(user.Id, user.Email, user.Username);
-                var expiresAt = DateTime.UtcNow.AddHours(24);
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("User registered successfully with ID: {UserId}", user.Id);
+
+                var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
+                    int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "15"));
 
                 return new AuthResponse
                 {
-                    Token = token,
+                    Token = accessToken,
+                    RefreshToken = refreshToken.Token,
                     Username = user.Username,
                     Email = user.Email,
-                    ExpiresAt = expiresAt
+                    ExpiresAt = accessTokenExpiry
                 };
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error during user registration");
                 return null;
             }
         }
 
-        public async Task<AuthResponse?> LoginAsync(LoginRequest request)
+        public async Task<AuthResponse?> LoginAsync(LoginRequest request, string? ipAddress = null)
         {
             try
             {
@@ -89,38 +94,123 @@ namespace TIBG.API.Core.DataAccess
 
                 if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
                 {
-                    _logger.LogWarning($"Failed login attempt for email: {request.Email}");
+                    _logger.LogWarning("Failed login attempt");
                     return null;
                 }
 
                 if (!user.IsActive)
                 {
-                    _logger.LogWarning($"Login attempt for inactive user: {request.Email}");
+                    _logger.LogWarning("Login attempt for inactive user");
                     return null;
                 }
 
-                // Update last login
                 user.LastLoginAt = DateTime.UtcNow;
+
+                var oldTokens = await _context.RefreshTokens
+                    .Where(t => t.UserId == user.Id && t.IsActive)
+                    .OrderByDescending(t => t.CreatedAt)
+                    .Skip(4)
+                    .ToListAsync();
+
+                foreach (var token in oldTokens)
+                {
+                    token.RevokedAt = DateTime.UtcNow;
+                    token.RevokedByIp = ipAddress;
+                }
+
+                var accessToken = _jwtService.GenerateAccessToken(user.Id, user.Email, user.Username);
+                var refreshToken = await CreateRefreshTokenAsync(user.Id, ipAddress);
+
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"User logged in successfully: {user.Email}");
+                _logger.LogInformation("User logged in successfully with ID: {UserId}", user.Id);
 
-                // Generate JWT token
-                var token = _jwtService.GenerateToken(user.Id, user.Email, user.Username);
-                var expiresAt = DateTime.UtcNow.AddHours(24);
+                var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
+                    int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "15"));
 
                 return new AuthResponse
                 {
-                    Token = token,
+                    Token = accessToken,
+                    RefreshToken = refreshToken.Token,
                     Username = user.Username,
                     Email = user.Email,
-                    ExpiresAt = expiresAt
+                    ExpiresAt = accessTokenExpiry
                 };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during user login");
                 return null;
+            }
+        }
+
+        public async Task<AuthResponse?> RefreshTokenAsync(string refreshToken, string? ipAddress = null)
+        {
+            try
+            {
+                var token = await _context.RefreshTokens
+                    .Include(t => t.User)
+                    .FirstOrDefaultAsync(t => t.Token == refreshToken);
+
+                if (token == null || !token.IsActive)
+                {
+                    _logger.LogWarning("Invalid or inactive refresh token");
+                    return null;
+                }
+
+                token.RevokedAt = DateTime.UtcNow;
+                token.RevokedByIp = ipAddress;
+
+                var user = token.User;
+                var newAccessToken = _jwtService.GenerateAccessToken(user.Id, user.Email, user.Username);
+                var newRefreshToken = await CreateRefreshTokenAsync(user.Id, ipAddress);
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Tokens refreshed for user ID: {UserId}", user.Id);
+
+                var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
+                    int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "15"));
+
+                return new AuthResponse
+                {
+                    Token = newAccessToken,
+                    RefreshToken = newRefreshToken.Token,
+                    Username = user.Username,
+                    Email = user.Email,
+                    ExpiresAt = accessTokenExpiry
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error refreshing token");
+                return null;
+            }
+        }
+
+        public async Task<bool> RevokeTokenAsync(string refreshToken, string? ipAddress = null)
+        {
+            try
+            {
+                var token = await _context.RefreshTokens
+                    .FirstOrDefaultAsync(t => t.Token == refreshToken);
+
+                if (token == null || !token.IsActive)
+                {
+                    return false;
+                }
+
+                token.RevokedAt = DateTime.UtcNow;
+                token.RevokedByIp = ipAddress;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Token revoked for user ID: {UserId}", token.UserId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error revoking token");
+                return false;
             }
         }
 
@@ -134,17 +224,27 @@ namespace TIBG.API.Core.DataAccess
             return await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && u.IsActive);
         }
 
-        /// <summary>
-        /// Hash password using BCrypt with automatic salt generation
-        /// </summary>
+        private async Task<RefreshToken> CreateRefreshTokenAsync(int userId, string? ipAddress)
+        {
+            var refreshTokenDays = int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7");
+
+            var refreshToken = new RefreshToken
+            {
+                UserId = userId,
+                Token = _jwtService.GenerateRefreshToken(),
+                ExpiresAt = DateTime.UtcNow.AddDays(refreshTokenDays),
+                CreatedAt = DateTime.UtcNow,
+                CreatedByIp = ipAddress
+            };
+
+            _context.RefreshTokens.Add(refreshToken);
+            return refreshToken;
+        }
         private static string HashPassword(string password)
         {
             return BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
         }
 
-        /// <summary>
-        /// Verify password against BCrypt hash
-        /// </summary>
         private static bool VerifyPassword(string password, string hash)
         {
             try

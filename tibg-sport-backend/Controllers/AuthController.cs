@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TIBG.Contracts.DataAccess;
 using TIBG.Models;
 
@@ -19,15 +20,19 @@ namespace tibg_sport_backend.Controllers
             _logger = logger;
         }
 
+        private string? GetIpAddress()
+        {
+            return HttpContext.Connection.RemoteIpAddress?.ToString();
+        }
+
         /// <summary>
         /// Register a new user
         /// </summary>
-        /// <param name="request">Registration details</param>
-        /// <returns>Authentication response with JWT token</returns>
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             try
@@ -35,45 +40,58 @@ namespace tibg_sport_backend.Controllers
                 if (request == null)
                 {
                     _logger.LogWarning("Register attempt with null request");
-                    return BadRequest(new { error = "Request data is required" });
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.INVALID_INPUT,
+                        "Request data is required"
+                    ));
                 }
 
                 if (!ModelState.IsValid)
                 {
                     _logger.LogWarning("Register attempt with invalid model state");
-                    return BadRequest(ModelState);
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.VALIDATION_FAILED,
+                        "Validation failed",
+                        details: ModelState
+                    ));
                 }
 
-                _logger.LogInformation("Attempting to register user with email: {Email}", request.Email);
+                _logger.LogInformation("Attempting to register user");
 
-                var response = await _authService.RegisterAsync(request);
+                var response = await _authService.RegisterAsync(request, GetIpAddress());
 
                 if (response == null)
                 {
-                    _logger.LogWarning("Registration failed for email: {Email}", request.Email);
-                    return BadRequest(new { error = "Registration failed. Email might already be in use." });
+                    _logger.LogWarning("Registration failed - email may already exist");
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.EMAIL_ALREADY_EXISTS,
+                        "Registration failed. Email might already be in use."
+                    ));
                 }
 
-                _logger.LogInformation("User successfully registered with email: {Email}", request.Email);
+                _logger.LogInformation("User successfully registered");
                 return CreatedAtAction(nameof(Register), new { email = response.Email }, response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while registering user with email: {Email}", request?.Email);
-                return StatusCode(500, new { error = "An error occurred while processing your request" });
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred during registration. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
             }
         }
 
         /// <summary>
         /// Login an existing user
         /// </summary>
-        /// <param name="request">Login credentials</param>
-        /// <returns>Authentication response with JWT token</returns>
         [HttpPost("login")]
         [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             try
@@ -81,98 +99,214 @@ namespace tibg_sport_backend.Controllers
                 if (request == null)
                 {
                     _logger.LogWarning("Login attempt with null request");
-                    return BadRequest(new { error = "Request data is required" });
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.INVALID_INPUT,
+                        "Request data is required"
+                    ));
                 }
 
                 if (!ModelState.IsValid)
                 {
                     _logger.LogWarning("Login attempt with invalid model state");
-                    return BadRequest(ModelState);
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.VALIDATION_FAILED,
+                        "Validation failed",
+                        details: ModelState
+                    ));
                 }
 
-                _logger.LogInformation("Login attempt for email: {Email}", request.Email);
+                _logger.LogInformation("Login attempt");
 
-                var response = await _authService.LoginAsync(request);
+                var response = await _authService.LoginAsync(request, GetIpAddress());
 
                 if (response == null)
                 {
-                    _logger.LogWarning("Login failed for email: {Email}", request.Email);
-                    return Unauthorized(new { error = "Invalid email or password" });
+                    _logger.LogWarning("Login failed - invalid credentials");
+                    return Unauthorized(new ErrorResponse(
+                        ErrorCodes.INVALID_CREDENTIALS,
+                        "Invalid email or password"
+                    ));
                 }
 
-                _logger.LogInformation("User successfully logged in with email: {Email}", request.Email);
+                _logger.LogInformation("User successfully logged in");
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while logging in user with email: {Email}", request?.Email);
-                return StatusCode(500, new { error = "An error occurred while processing your request" });
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred during login. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
+            }
+        }
+
+        /// <summary>
+        /// Refresh access token using refresh token
+        /// </summary>
+        [HttpPost("refresh")]
+        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.RefreshToken))
+                {
+                    _logger.LogWarning("Refresh token attempt with invalid request");
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.INVALID_INPUT,
+                        "Refresh token is required"
+                    ));
+                }
+
+                var response = await _authService.RefreshTokenAsync(request.RefreshToken, GetIpAddress());
+
+                if (response == null)
+                {
+                    _logger.LogWarning("Refresh token failed - invalid or expired token");
+                    return Unauthorized(new ErrorResponse(
+                        ErrorCodes.REFRESH_TOKEN_INVALID,
+                        "Invalid or expired refresh token"
+                    ));
+                }
+
+                _logger.LogInformation("Token refreshed successfully");
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred during token refresh. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
+            }
+        }
+
+        /// <summary>
+        /// Logout user by revoking refresh token
+        /// </summary>
+        [HttpPost("logout")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrWhiteSpace(request.RefreshToken))
+                {
+                    _logger.LogWarning("Logout attempt with invalid request");
+                    return BadRequest(new ErrorResponse(
+                        ErrorCodes.INVALID_INPUT,
+                        "Refresh token is required"
+                    ));
+                }
+
+                var success = await _authService.RevokeTokenAsync(request.RefreshToken, GetIpAddress());
+
+                if (!success)
+                {
+                    _logger.LogWarning("Logout failed - token not found or already revoked");
+                }
+
+                _logger.LogInformation("User logged out successfully");
+                return Ok(new { message = "Logged out successfully" });
+            }
+            catch (Exception ex)
+            {
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred during logout. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
             }
         }
 
         /// <summary>
         /// Get user by ID
         /// </summary>
-        /// <param name="id">User ID</param>
-        /// <returns>User information</returns>
         [HttpGet("user/{id}")]
         [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserById(int id)
         {
             try
             {
-                _logger.LogInformation("Fetching user with ID: {UserId}", id);
+                _logger.LogInformation("Fetching user by ID");
 
                 var user = await _authService.GetUserByIdAsync(id);
 
                 if (user == null)
                 {
-                    _logger.LogWarning("User not found with ID: {UserId}", id);
-                    return NotFound(new { error = "User not found" });
+                    _logger.LogWarning("User not found");
+                    return NotFound(new ErrorResponse(
+                        ErrorCodes.RESOURCE_NOT_FOUND,
+                        "User not found"
+                    ));
                 }
 
-                _logger.LogInformation("User found with ID: {UserId}", id);
+                _logger.LogInformation("User found");
                 return Ok(user);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while fetching user with ID: {UserId}", id);
-                return StatusCode(500, new { error = "An error occurred while processing your request" });
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred while fetching user. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
             }
         }
 
         /// <summary>
         /// Get user by email
         /// </summary>
-        /// <param name="email">User email</param>
-        /// <returns>User information</returns>
         [HttpGet("user/email/{email}")]
         [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetUserByEmail(string email)
         {
             try
             {
-                _logger.LogInformation("Fetching user with email: {Email}", email);
+                _logger.LogInformation("Fetching user by email");
 
                 var user = await _authService.GetUserByEmailAsync(email);
 
                 if (user == null)
                 {
-                    _logger.LogWarning("User not found with email: {Email}", email);
-                    return NotFound(new { error = "User not found" });
+                    _logger.LogWarning("User not found");
+                    return NotFound(new ErrorResponse(
+                        ErrorCodes.RESOURCE_NOT_FOUND,
+                        "User not found"
+                    ));
                 }
 
-                _logger.LogInformation("User found with email: {Email}", email);
+                _logger.LogInformation("User found");
                 return Ok(user);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while fetching user with email: {Email}", email);
-                return StatusCode(500, new { error = "An error occurred while processing your request" });
+                var supportId = Guid.NewGuid().ToString();
+                _logger.LogError(ex, "Error occurred while fetching user. SupportId: {SupportId}", supportId);
+                return StatusCode(500, new ErrorResponse(
+                    ErrorCodes.INTERNAL_SERVER_ERROR,
+                    "An error occurred while processing your request",
+                    supportId: supportId
+                ));
             }
         }
     }

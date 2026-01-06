@@ -1,6 +1,7 @@
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -23,13 +24,14 @@ namespace TIBG.API.Core.DataAccess
             _logger = logger;
         }
 
-        public string GenerateToken(int userId, string email, string username)
+        public string GenerateAccessToken(int userId, string email, string username)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
             var issuer = jwtSettings["Issuer"] ?? "FytAI";
             var audience = jwtSettings["Audience"] ?? "FytAI-Users";
-            var expirationHours = int.Parse(jwtSettings["ExpirationHours"] ?? "24");
+            // Short-lived access token: 15 minutes
+            var expirationMinutes = int.Parse(jwtSettings["AccessTokenExpirationMinutes"] ?? "15");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -47,11 +49,25 @@ namespace TIBG.API.Core.DataAccess
                 issuer: issuer,
                 audience: audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(expirationHours),
+                expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
                 signingCredentials: credentials
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public string GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+            return Convert.ToBase64String(randomBytes);
+        }
+
+        [Obsolete("Use GenerateAccessToken instead")]
+        public string GenerateToken(int userId, string email, string username)
+        {
+            return GenerateAccessToken(userId, email, username);
         }
 
         public int? ValidateToken(string token)
