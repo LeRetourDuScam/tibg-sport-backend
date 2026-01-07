@@ -48,10 +48,10 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
 });
 
-var cacheSizeLimitMB = builder.Configuration.GetValue<int>("Groq:CacheSizeLimitMB", 100);
+var cacheSizeLimitMB = builder.Configuration.GetValue<int>("Ai:CacheSizeLimitMB", 100);
 builder.Services.AddMemoryCache(options =>
 {
-    options.SizeLimit = cacheSizeLimitMB * 1024 * 1024; // Convert MB to bytes
+    options.SizeLimit = cacheSizeLimitMB * 1024 * 1024; 
 });
 
 var globalRateConfig = builder.Configuration.GetSection("RateLimiting:Global");
@@ -99,9 +99,9 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
-builder.Services.AddHttpClient<IAiRecommendationService, GroqAiService>();
-builder.Services.AddHttpClient<IChatService, GroqChatService>();
+builder.Services.Configure<AiSettings>(builder.Configuration.GetSection("Ai"));
+builder.Services.AddHttpClient<IAiRecommendationService, AiService>();
+builder.Services.AddHttpClient<IChatService, AiChatService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey must be configured");
@@ -136,8 +136,8 @@ builder.Services.AddDbContext<FytAiDbContext>(options =>
 
 builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 
-builder.Services.AddScoped<IAiRecommendationService, GroqAiService>();
-builder.Services.AddScoped<IChatService, GroqChatService>();
+builder.Services.AddScoped<IAiRecommendationService, AiService>();
+builder.Services.AddScoped<IChatService, AiChatService>();
 builder.Services.AddScoped<IFeedbackService, FeedbackService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();

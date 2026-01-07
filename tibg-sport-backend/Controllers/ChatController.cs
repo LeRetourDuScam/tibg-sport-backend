@@ -65,9 +65,9 @@ namespace tibg_sport_backend.Controllers
                 _logger.LogError(ex, "HTTP error while calling chat service");
                 return StatusCode(503, new { error = "AI service temporarily unavailable. Please try again." });
             }
-            catch (GroqApiException ex)
+            catch (AiApiException ex)
             {
-                _logger.LogError(ex, "Groq API error while processing chat");
+                _logger.LogError(ex, "Ai API error while processing chat");
                 return StatusCode(500, new { error = "Failed to process your message. Please try again." });
             }
             catch (Exception ex)

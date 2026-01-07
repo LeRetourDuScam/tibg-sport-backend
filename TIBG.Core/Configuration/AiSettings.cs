@@ -1,9 +1,6 @@
 namespace TIBG.API.Core.Configuration
 {
-    /// <summary>
-    /// Configuration options for Groq API integration.
-    /// </summary>
-    public class GroqSettings
+    public class AiSettings
     {
         public string ApiKey { get; set; } = string.Empty;
         public string ModelName { get; set; } = "llama-3.3-70b-versatile";

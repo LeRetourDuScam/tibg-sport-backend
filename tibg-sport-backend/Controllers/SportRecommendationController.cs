@@ -33,7 +33,6 @@ namespace tibg_sport_backend.Controllers
                     return BadRequest(new { error = "Profile data is required" });
                 }
 
-                // Validate ModelState (checks Required and Range attributes automatically)
                 if (!ModelState.IsValid)
                 {
                     var errors = ModelState.Values
@@ -43,7 +42,6 @@ namespace tibg_sport_backend.Controllers
                     return BadRequest(new { error = "Validation failed", details = errors });
                 }
 
-                // Additional sanitization for optional text fields
                 if (!string.IsNullOrWhiteSpace(profile.HealthConditions))
                 {
                     profile.HealthConditions = SanitizeInput(profile.HealthConditions);
@@ -87,7 +85,6 @@ namespace tibg_sport_backend.Controllers
             if (string.IsNullOrWhiteSpace(input))
                 return string.Empty;
 
-            // Remove potentially dangerous characters
             return System.Text.RegularExpressions.Regex.Replace(
                 input, 
                 @"[<>'"";(){}[\]\\]", 
@@ -158,7 +155,7 @@ namespace tibg_sport_backend.Controllers
 
                 if (!isAiAvailable)
                 {
-                    _logger.LogWarning("Groq service is unavailable");
+                    _logger.LogWarning("Ai service is unavailable");
                 }
 
                 return Ok(response);

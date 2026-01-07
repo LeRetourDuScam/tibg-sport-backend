@@ -11,21 +11,21 @@ using TIBG.Models;
 
 namespace TIBG.API.Core.DataAccess
 {
-    public class GroqChatService : IChatService
+    public class AiChatService : IChatService
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<GroqChatService> _logger;
-        private readonly IOptions<GroqSettings> _settings;
+        private readonly ILogger<AiChatService> _logger;
+        private readonly IOptions<AiSettings> _settings;
         private readonly string _apiKey;
         private readonly string _modelName;
         private readonly string _baseUrl;
         private const string DefaultBaseUrl = "https://api.groq.com/openai/v1/chat/completions";
 
-        public GroqChatService(
+        public AiChatService(
             HttpClient httpClient,
             IConfiguration configuration,
-            ILogger<GroqChatService> logger,
-            IOptions<GroqSettings> settings)
+            ILogger<AiChatService> logger,
+            IOptions<AiSettings> settings)
         {
             _httpClient = httpClient;
             _logger = logger;
@@ -33,7 +33,7 @@ namespace TIBG.API.Core.DataAccess
 
             _apiKey = !string.IsNullOrWhiteSpace(_settings.Value.ApiKey)
                 ? _settings.Value.ApiKey
-                : configuration["Groq:ApiKey"] ?? throw new ArgumentException("GROQ_API_KEY not configured");
+                : configuration["Ai:ApiKey"] ?? throw new ArgumentException("Ai_API_KEY not configured");
 
             _modelName = string.IsNullOrWhiteSpace(_settings.Value.ModelName)
                 ? "llama-3.3-70b-versatile"
@@ -68,20 +68,20 @@ namespace TIBG.API.Core.DataAccess
                 var json = JsonSerializer.Serialize(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                _logger.LogInformation("Sending chat request to Groq API with model: {Model}", _modelName);
+                _logger.LogInformation("Sending chat request to Ai API with model: {Model}", _modelName);
 
                 var response = await _httpClient.PostAsync(_baseUrl, content);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
-                    throw new HttpRequestException($"Groq API returned {response.StatusCode}");
+                    _logger.LogError("Ai API error: {StatusCode} - {Error}", response.StatusCode, error);
+                    throw new HttpRequestException($"Ai API returned {response.StatusCode}");
                 }
 
                 var responseText = await response.Content.ReadAsStringAsync();
 
-                var result = JsonSerializer.Deserialize<GroqChatResponse>(responseText, new JsonSerializerOptions
+                var result = JsonSerializer.Deserialize<AiChatResponse>(responseText, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
@@ -89,16 +89,16 @@ namespace TIBG.API.Core.DataAccess
                 var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
                 if (string.IsNullOrWhiteSpace(aiResponse))
                 {
-                    _logger.LogError("Groq API returned empty content");
-                    throw new GroqApiException("Groq API returned empty content");
+                    _logger.LogError("Ai API returned empty content");
+                    throw new AiApiException("Ai API returned empty content");
                 }
 
-                _logger.LogInformation("Successfully received chat response from Groq API");
+                _logger.LogInformation("Successfully received chat response from Ai API");
                 return aiResponse;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting chat response from Groq API");
+                _logger.LogError(ex, "Error getting chat response from Ai API");
                 throw;
             }
         }
@@ -179,7 +179,7 @@ namespace TIBG.API.Core.DataAccess
             return messages.ToArray();
         }
 
-        private class GroqChatResponse
+        private class AiChatResponse
         {
             public Choice[]? Choices { get; set; }
 

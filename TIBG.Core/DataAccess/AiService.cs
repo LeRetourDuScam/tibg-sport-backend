@@ -13,14 +13,14 @@ using TIBG.Models;
 namespace TIBG.API.Core.DataAccess
 {
     /// <summary>
-    /// Service for communicating with Groq API for sport recommendations
+    /// Service for communicating with API for sport recommendations
     /// </summary>
-    public class GroqAiService : IAiRecommendationService
+    public class AiService : IAiRecommendationService
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<GroqAiService> _logger;
+        private readonly ILogger<AiService> _logger;
         private readonly IMemoryCache _cache;
-        private readonly IOptions<GroqSettings> _settings;
+        private readonly IOptions<AiSettings> _settings;
         private readonly string _apiKey;
         private readonly string _modelName;
         private readonly string _baseUrl;
@@ -28,12 +28,12 @@ namespace TIBG.API.Core.DataAccess
         private const int DefaultMaxRetries = 3;
         private const int DefaultCacheDurationMinutes = 60;
 
-        public GroqAiService(
+        public AiService(
             HttpClient httpClient,
             IConfiguration configuration,
-            ILogger<GroqAiService> logger,
+            ILogger<AiService> logger,
             IMemoryCache cache,
-            IOptions<GroqSettings> settings)
+            IOptions<AiSettings> settings)
         {
             _httpClient = httpClient;
             _logger = logger;
@@ -42,7 +42,7 @@ namespace TIBG.API.Core.DataAccess
 
             _apiKey = !string.IsNullOrWhiteSpace(_settings.Value.ApiKey)
                 ? _settings.Value.ApiKey
-                : configuration["Groq:ApiKey"] ?? throw new ArgumentException("GROQ_API_KEY not configured");
+                : configuration["Ai:ApiKey"] ?? throw new ArgumentException("Ai_API_KEY not configured");
 
             _modelName = string.IsNullOrWhiteSpace(_settings.Value.ModelName)
                 ? "llama-3.3-70b-versatile"
@@ -74,11 +74,16 @@ namespace TIBG.API.Core.DataAccess
             {
                 try
                 {
-                    var result = await CallGroqApiAsync(profile);
+                    var result = await CallAiApiAsync(profile);
 
                     if (result != null)
                     {
-                        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(cacheDuration));
+                        var cacheEntryOptions = new MemoryCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(cacheDuration),
+                            Size = 1
+                        };
+                        _cache.Set(cacheKey, result, cacheEntryOptions);
                     }
 
                     return result;
@@ -86,18 +91,18 @@ namespace TIBG.API.Core.DataAccess
                 catch (HttpRequestException ex) when (attempt < maxRetries)
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                    _logger.LogWarning(ex, "Groq API attempt {Attempt} failed, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    _logger.LogWarning(ex, "Ai API attempt {Attempt} failed, retrying in {Delay}s", attempt, delay.TotalSeconds);
                     await Task.Delay(delay);
                 }
                 catch (TaskCanceledException ex) when (attempt < maxRetries)
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                    _logger.LogWarning(ex, "Groq API attempt {Attempt} timed out, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    _logger.LogWarning(ex, "Ai API attempt {Attempt} timed out, retrying in {Delay}s", attempt, delay.TotalSeconds);
                     await Task.Delay(delay);
                 }
             }
 
-            throw new GroqApiException("Failed after max retries");
+            throw new AiApiException("Failed after max retries");
         }
 
         public async Task<bool> IsServiceAvailableAsync()
@@ -122,7 +127,7 @@ namespace TIBG.API.Core.DataAccess
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking Groq service availability");
+                _logger.LogError(ex, "Error checking Ai service availability");
                 return false;
             }
         }
@@ -144,11 +149,16 @@ namespace TIBG.API.Core.DataAccess
             {
                 try
                 {
-                    var result = await CallGroqApiForTrainingPlanAsync(profile, sport);
+                    var result = await CallAiApiForTrainingPlanAsync(profile, sport);
 
                     if (result != null)
                     {
-                        _cache.Set(cacheKey, result, TimeSpan.FromMinutes(cacheDuration));
+                        var cacheEntryOptions = new MemoryCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(cacheDuration),
+                            Size = 1 
+                        };
+                        _cache.Set(cacheKey, result, cacheEntryOptions);
                     }
 
                     return result;
@@ -156,21 +166,21 @@ namespace TIBG.API.Core.DataAccess
                 catch (HttpRequestException ex) when (attempt < maxRetries)
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                    _logger.LogWarning(ex, "Groq API attempt {Attempt} failed, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    _logger.LogWarning(ex, "Ai API attempt {Attempt} failed, retrying in {Delay}s", attempt, delay.TotalSeconds);
                     await Task.Delay(delay);
                 }
                 catch (TaskCanceledException ex) when (attempt < maxRetries)
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                    _logger.LogWarning(ex, "Groq API attempt {Attempt} timed out, retrying in {Delay}s", attempt, delay.TotalSeconds);
+                    _logger.LogWarning(ex, "Ai API attempt {Attempt} timed out, retrying in {Delay}s", attempt, delay.TotalSeconds);
                     await Task.Delay(delay);
                 }
             }
 
-            throw new GroqApiException("Failed to generate training plan after max retries");
+            throw new AiApiException("Failed to generate training plan after max retries");
         }
 
-        private async Task<SportRecommendation?> CallGroqApiAsync(UserProfile profile)
+        private async Task<SportRecommendation?> CallAiApiAsync(UserProfile profile)
         {
             var prompt = BuildPrompt(profile);
             var language = profile.Language ?? "en";
@@ -201,20 +211,20 @@ namespace TIBG.API.Core.DataAccess
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            _logger.LogInformation("Sending request to Groq API with model: {Model}", _modelName);
+            _logger.LogInformation("Sending request to Ai API with model: {Model}", _modelName);
 
             var response = await _httpClient.PostAsync(_baseUrl, content);
 
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
-                throw new HttpRequestException($"Groq API returned {response.StatusCode}");
+                _logger.LogError("Ai API error: {StatusCode} - {Error}", response.StatusCode, error);
+                throw new HttpRequestException($"Ai API returned {response.StatusCode}");
             }
 
             var responseText = await response.Content.ReadAsStringAsync();
 
-            var result = JsonSerializer.Deserialize<GroqResponse>(responseText, new JsonSerializerOptions
+            var result = JsonSerializer.Deserialize<AiResponse>(responseText, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
@@ -222,8 +232,8 @@ namespace TIBG.API.Core.DataAccess
             var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrWhiteSpace(aiResponse))
             {
-                _logger.LogError("Groq API returned empty content");
-                throw new GroqApiException("Groq API returned empty content");
+                _logger.LogError("Ai API returned empty content");
+                throw new AiApiException("Ai API returned empty content");
             }
 
             return ParseAiResponse(aiResponse);
@@ -408,7 +418,7 @@ namespace TIBG.API.Core.DataAccess
             }
         }
 
-        private async Task<TrainingPlan?> CallGroqApiForTrainingPlanAsync(UserProfile profile, string sport)
+        private async Task<TrainingPlan?> CallAiApiForTrainingPlanAsync(UserProfile profile, string sport)
         {
             var prompt = BuildTrainingPlanPrompt(profile, sport);
             var language = profile.Language ?? "en";
@@ -439,20 +449,20 @@ namespace TIBG.API.Core.DataAccess
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            _logger.LogInformation("Sending training plan request to Groq API with model: {Model}", _modelName);
+            _logger.LogInformation("Sending training plan request to Ai API with model: {Model}", _modelName);
 
             var response = await _httpClient.PostAsync(_baseUrl, content);
 
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Groq API error: {StatusCode} - {Error}", response.StatusCode, error);
-                throw new HttpRequestException($"Groq API returned {response.StatusCode}");
+                _logger.LogError("Ai API error: {StatusCode} - {Error}", response.StatusCode, error);
+                throw new HttpRequestException($"Ai API returned {response.StatusCode}");
             }
 
             var responseText = await response.Content.ReadAsStringAsync();
 
-            var result = JsonSerializer.Deserialize<GroqResponse>(responseText, new JsonSerializerOptions
+            var result = JsonSerializer.Deserialize<AiResponse>(responseText, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
@@ -460,8 +470,8 @@ namespace TIBG.API.Core.DataAccess
             var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrWhiteSpace(aiResponse))
             {
-                _logger.LogError("Groq API returned empty content");
-                throw new GroqApiException("Groq API returned empty content");
+                _logger.LogError("Ai API returned empty content");
+                throw new AiApiException("Ai API returned empty content");
             }
 
             return ParseTrainingPlanResponse(aiResponse);
@@ -620,7 +630,7 @@ namespace TIBG.API.Core.DataAccess
             }
         }
 
-        private class GroqResponse
+        private class AiResponse
         {
             public List<Choice>? Choices { get; set; }
         }

@@ -51,8 +51,7 @@ namespace tibg_sport_backend.Controllers
                     _logger.LogWarning("Register attempt with invalid model state");
                     return BadRequest(new ErrorResponse(
                         ErrorCodes.VALIDATION_FAILED,
-                        "Validation failed",
-                        details: ModelState
+                        "Validation failed"
                     ));
                 }
 
@@ -110,8 +109,7 @@ namespace tibg_sport_backend.Controllers
                     _logger.LogWarning("Login attempt with invalid model state");
                     return BadRequest(new ErrorResponse(
                         ErrorCodes.VALIDATION_FAILED,
-                        "Validation failed",
-                        details: ModelState
+                        "Validation failed"
                     ));
                 }
 

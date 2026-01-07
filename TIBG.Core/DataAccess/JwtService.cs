@@ -30,7 +30,6 @@ namespace TIBG.API.Core.DataAccess
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
             var issuer = jwtSettings["Issuer"] ?? "FytAI";
             var audience = jwtSettings["Audience"] ?? "FytAI-Users";
-            // Short-lived access token: 15 minutes
             var expirationMinutes = int.Parse(jwtSettings["AccessTokenExpirationMinutes"] ?? "15");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
