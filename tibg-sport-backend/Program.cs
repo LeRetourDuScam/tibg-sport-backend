@@ -100,7 +100,6 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.Configure<AiSettings>(builder.Configuration.GetSection("Ai"));
-builder.Services.AddHttpClient<IAiRecommendationService, AiService>();
 builder.Services.AddHttpClient<IChatService, AiChatService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -135,8 +134,6 @@ builder.Services.AddDbContext<FytAiDbContext>(options =>
 });
 
 builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
-
-builder.Services.AddScoped<IAiRecommendationService, AiService>();
 builder.Services.AddScoped<IChatService, AiChatService>();
 builder.Services.AddScoped<IFeedbackService, FeedbackService>();
 builder.Services.AddScoped<IAuthService, AuthService>();

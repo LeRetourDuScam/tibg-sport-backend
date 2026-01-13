@@ -48,120 +48,6 @@ namespace TIBG.API.Core.DataAccess
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
         }
 
-        public async Task<string> GetChatResponseAsync(ChatRequest request)
-        {
-            try
-            {
-                var systemPrompt = BuildSystemPrompt(request.UserProfile, request.Recommendation);
-                var messages = BuildMessageHistory(systemPrompt, request.ConversationHistory, request.UserMessage);
-
-                var requestBody = new
-                {
-                    model = _modelName,
-                    messages = messages,
-                    max_completion_tokens = 800,
-                    temperature = 0.7,
-                    top_p = 0.9,
-                    stream = false
-                };
-
-                var json = JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                _logger.LogInformation("Sending chat request to Ai API with model: {Model}", _modelName);
-
-                var response = await _httpClient.PostAsync(_baseUrl, content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Ai API error: {StatusCode} - {Error}", response.StatusCode, error);
-                    throw new HttpRequestException($"Ai API returned {response.StatusCode}");
-                }
-
-                var responseText = await response.Content.ReadAsStringAsync();
-
-                var result = JsonSerializer.Deserialize<AiChatResponse>(responseText, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
-                if (string.IsNullOrWhiteSpace(aiResponse))
-                {
-                    _logger.LogError("Ai API returned empty content");
-                    throw new AiApiException("Ai API returned empty content");
-                }
-
-                _logger.LogInformation("Successfully received chat response from Ai API");
-                return aiResponse;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting chat response from Ai API");
-                throw;
-            }
-        }
-
-        private string BuildSystemPrompt(UserProfile profile, SportRecommendation recommendation)
-        {
-            var language = profile.Language ?? "en";
-            var languageInstruction = language switch
-            {
-                "fr" => "Réponds TOUJOURS en français.",
-                "en" => "Always respond in English.",
-                _ => "Always respond in English."
-            };
-
-            return $@"You are FytAI, an expert sports coach and health advisor. Your role is to help users with questions about their personalized sport recommendation.
-
-            {languageInstruction}
-
-            === USER CONTEXT ===
-            User Profile:
-            - Age: {profile.Age}, Gender: {profile.Gender}
-            - Fitness Level: {profile.FitnessLevel}, Exercise Frequency: {profile.ExerciseFrequency}
-            - Main Goal: {profile.MainGoal}
-            - Health Concerns: {GetHealthConcerns(profile)}
-            - Available Time: {profile.AvailableTime}, Available Days: {profile.AvailableDays}/week
-            - Preferences: {profile.LocationPreference}, {profile.TeamPreference}
-
-            Recommended Sport: {recommendation.Sport} (Score: {recommendation.Score}%)
-            Reason: {recommendation.Reason}
-
-
-            === YOUR ROLE ===
-            - Answer questions about the recommended sport and why it suits the user
-            - Provide practical advice on getting started
-            - Suggest modifications based on health concerns
-            - Explain exercises and training plan details
-            - Offer motivation and address concerns
-            - Be supportive, encouraging, and professional
-            - Keep responses concise (2-4 paragraphs max)
-            - If asked about medical issues, always remind users to consult healthcare professionals
-
-            === COMMUNICATION STYLE ===
-            Tone: Encouraging and professional
-            Learning Style: Practical with examples";
-        }
-
-        private string GetHealthConcerns(UserProfile profile)
-        {
-            var concerns = new List<string>();
-            
-            if (!string.IsNullOrWhiteSpace(profile.HealthConditions))
-            {
-                concerns.Add($"Health: {profile.HealthConditions}");
-            }
-            
-            if (!string.IsNullOrWhiteSpace(profile.Injuries))
-            {
-                concerns.Add($"Injuries: {profile.Injuries}");
-            }
-            
-            return concerns.Any() ? string.Join(", ", concerns) : "None reported";
-        }
-
         private object[] BuildMessageHistory(string systemPrompt, List<ChatMessage> history, string userMessage)
         {
             var messages = new List<object>
@@ -192,6 +78,114 @@ namespace TIBG.API.Core.DataAccess
             {
                 public string? Content { get; set; }
             }
+        }
+
+        public async Task<string> GetHealthChatResponseAsync(HealthChatRequest request)
+        {
+            try
+            {
+                var systemPrompt = BuildHealthSystemPrompt(request);
+                var messages = BuildMessageHistory(systemPrompt, request.ConversationHistory, request.UserMessage);
+
+                var requestBody = new
+                {
+                    model = _modelName,
+                    messages = messages,
+                    max_completion_tokens = 800,
+                    temperature = 0.7,
+                    top_p = 0.9,
+                    stream = false
+                };
+
+                var json = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                _logger.LogInformation("Sending health chat request to AI API with model: {Model}", _modelName);
+
+                var response = await _httpClient.PostAsync(_baseUrl, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("AI API error: {StatusCode} - {Error}", response.StatusCode, error);
+                    throw new HttpRequestException($"AI API returned {response.StatusCode}");
+                }
+
+                var responseText = await response.Content.ReadAsStringAsync();
+
+                var result = JsonSerializer.Deserialize<AiChatResponse>(responseText, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
+                if (string.IsNullOrWhiteSpace(aiResponse))
+                {
+                    _logger.LogError("AI API returned empty content for health chat");
+                    throw new AiApiException("AI API returned empty content");
+                }
+
+                _logger.LogInformation("Successfully received health chat response from AI API");
+                return aiResponse;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting health chat response from AI API");
+                throw;
+            }
+        }
+
+        private string BuildHealthSystemPrompt(HealthChatRequest request)
+        {
+            var languageInstruction = request.Language switch
+            {
+                "fr" => "Réponds TOUJOURS en français.",
+                "en" => "Always respond in English.",
+                _ => "Réponds TOUJOURS en français."
+            };
+
+            var weakCategories = request.WeakCategories.Any() 
+                ? string.Join(", ", request.WeakCategories) 
+                : "Aucune catégorie faible";
+
+            var riskFactors = request.RiskFactors.Any() 
+                ? string.Join(", ", request.RiskFactors) 
+                : "Aucun facteur de risque identifié";
+
+            var exercises = request.RecommendedExercises.Any() 
+                ? string.Join(", ", request.RecommendedExercises.Take(8)) 
+                : "Exercices adaptés au profil";
+
+            var recommendations = request.Recommendations.Any() 
+                ? string.Join("\n- ", request.Recommendations.Take(5)) 
+                : "Suivre les conseils généraux de santé";
+
+            return $@"Tu es FytAI, un coach santé et bien-être expert. Tu aides les utilisateurs à comprendre leurs résultats de questionnaire de santé et à améliorer leur bien-être.
+
+            {languageInstruction}
+
+            === RÉSULTATS DU QUESTIONNAIRE DE SANTÉ ===
+            - Score global de santé: {request.ScorePercentage}%
+            - Niveau de santé: {request.HealthLevel}
+            - Catégories à améliorer: {weakCategories}
+            - Facteurs de risque identifiés: {riskFactors}
+            - Exercices recommandés: {exercises}
+            - Recommandations personnalisées:
+            - {recommendations}
+
+            === TON RÔLE ===
+            - Répondre aux questions sur les résultats du questionnaire de santé
+            - Expliquer le score et le niveau de santé de manière bienveillante
+            - Donner des conseils pratiques et personnalisés pour améliorer les catégories faibles
+            - Guider l'utilisateur sur les exercices recommandés
+            - Motiver et encourager l'utilisateur dans sa démarche de santé
+            - Être empathique, professionnel et encourageant
+            - Garder les réponses concises (2-4 paragraphes maximum)
+            - Toujours rappeler de consulter un professionnel de santé pour des problèmes médicaux
+
+            === STYLE DE COMMUNICATION ===
+            Ton: Encourageant, bienveillant et professionnel
+            Approche: Pratique avec des exemples concrets et des étapes réalisables";
         }
     }
 }

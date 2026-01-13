@@ -30,6 +30,31 @@ namespace TIBG.Models
         public string UserMessage { get; set; } = string.Empty;
     }
 
+    public class HealthChatRequest
+    {
+        [Required]
+        public int ScorePercentage { get; set; }
+
+        [Required]
+        public string HealthLevel { get; set; } = string.Empty;
+
+        public List<string> WeakCategories { get; set; } = new List<string>();
+
+        public List<string> RiskFactors { get; set; } = new List<string>();
+
+        public List<string> RecommendedExercises { get; set; } = new List<string>();
+
+        public List<string> Recommendations { get; set; } = new List<string>();
+
+        [Required]
+        public List<ChatMessage> ConversationHistory { get; set; } = new List<ChatMessage>();
+
+        [Required]
+        public string UserMessage { get; set; } = string.Empty;
+
+        public string Language { get; set; } = "fr";
+    }
+
     public class ChatResponse
     {
         [Required]
