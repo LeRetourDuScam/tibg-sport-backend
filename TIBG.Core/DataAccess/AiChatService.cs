@@ -6,6 +6,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Retry;
 using TIBG.API.Core.Configuration;
 using TIBG.Models;
 
@@ -19,6 +21,8 @@ namespace TIBG.API.Core.DataAccess
         private readonly string _apiKey;
         private readonly string _modelName;
         private readonly string _baseUrl;
+        private readonly int _maxRetries;
+        private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
         private const string DefaultBaseUrl = "https://api.groq.com/openai/v1/chat/completions";
 
         public AiChatService(
@@ -43,9 +47,28 @@ namespace TIBG.API.Core.DataAccess
                 ? DefaultBaseUrl
                 : _settings.Value.BaseUrl;
 
-            var timeoutSeconds = _settings.Value.TimeoutSeconds > 0 ? _settings.Value.TimeoutSeconds : 60;
+            _maxRetries = _settings.Value.MaxRetries > 0 ? _settings.Value.MaxRetries : 3;
+
+            // Augmenter le timeout pour gérer le cold start de Render (peut prendre 50+ secondes)
+            var timeoutSeconds = _settings.Value.TimeoutSeconds > 0 ? _settings.Value.TimeoutSeconds : 120;
             _httpClient.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+
+            // Configuration de la politique de retry avec backoff exponentiel
+            _retryPolicy = Policy<HttpResponseMessage>
+                .Handle<HttpRequestException>()
+                .Or<TaskCanceledException>()
+                .OrResult(r => (int)r.StatusCode >= 500 || r.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                .WaitAndRetryAsync(
+                    _maxRetries,
+                    retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    onRetry: (outcome, timespan, retryAttempt, context) =>
+                    {
+                        _logger.LogWarning(
+                            "Retry {RetryAttempt}/{MaxRetries} after {Delay}s due to: {Error}",
+                            retryAttempt, _maxRetries, timespan.TotalSeconds,
+                            outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
+                    });
         }
 
         private object[] BuildMessageHistory(string systemPrompt, List<ChatMessage> history, string userMessage)
@@ -98,11 +121,15 @@ namespace TIBG.API.Core.DataAccess
                 };
 
                 var json = JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 _logger.LogInformation("Sending health chat request to AI API with model: {Model}", _modelName);
 
-                var response = await _httpClient.PostAsync(_baseUrl, content);
+                // Utiliser la politique de retry pour la requête
+                var response = await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    return await _httpClient.PostAsync(_baseUrl, content);
+                });
 
                 if (!response.IsSuccessStatusCode)
                 {

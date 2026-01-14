@@ -60,17 +60,36 @@ namespace tibg_sport_backend.Controllers
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "HTTP error while calling health chat service");
-                return StatusCode(503, new { error = "AI service temporarily unavailable. Please try again." });
+                return StatusCode(503, new { 
+                    error = "AI service temporarily unavailable. Please try again in a few moments.",
+                    errorCode = "AI_SERVICE_UNAVAILABLE",
+                    retryAfter = 10
+                });
+            }
+            catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException || ex.CancellationToken.IsCancellationRequested == false)
+            {
+                _logger.LogError(ex, "Timeout while calling health chat service");
+                return StatusCode(504, new { 
+                    error = "The AI service took too long to respond. Please try again.",
+                    errorCode = "AI_SERVICE_TIMEOUT",
+                    retryAfter = 5
+                });
             }
             catch (AiApiException ex)
             {
                 _logger.LogError(ex, "AI API error while processing health chat");
-                return StatusCode(500, new { error = "Failed to process your message. Please try again." });
+                return StatusCode(500, new { 
+                    error = "Failed to process your message. Please try again.",
+                    errorCode = "AI_API_ERROR"
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error while processing health chat request");
-                return StatusCode(500, new { error = "An unexpected error occurred. Please try again." });
+                return StatusCode(500, new { 
+                    error = "An unexpected error occurred. Please try again.",
+                    errorCode = "INTERNAL_ERROR"
+                });
             }
         }
     }
