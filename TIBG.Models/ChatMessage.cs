@@ -15,21 +15,6 @@ namespace TIBG.Models
         public DateTime? Timestamp { get; set; }
     }
 
-    public class ChatRequest
-    {
-        [Required]
-        public UserProfile UserProfile { get; set; } = new UserProfile();
-
-        [Required]
-        public SportRecommendation Recommendation { get; set; } = new SportRecommendation();
-
-        [Required]
-        public List<ChatMessage> ConversationHistory { get; set; } = new List<ChatMessage>();
-
-        [Required]
-        public string UserMessage { get; set; } = string.Empty;
-    }
-
     public class HealthChatRequest
     {
         [Required]
