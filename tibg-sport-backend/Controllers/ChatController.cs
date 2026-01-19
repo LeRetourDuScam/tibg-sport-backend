@@ -73,5 +73,40 @@ namespace tibg_sport_backend.Controllers
                 return StatusCode(500, new { error = "An unexpected error occurred. Please try again." });
             }
         }
+
+        [HttpPost("chat/exercises")]
+        public async Task<IActionResult> GetExercises([FromBody] ExercisesRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return BadRequest(new { error = "Request data is required" });
+                }
+
+                _logger.LogInformation("Received exercises request for health level: {HealthLevel}, score: {Score}%", 
+                    request.HealthLevel, request.ScorePercentage);
+
+                var exercises = await _chatService.GetRecommendedExercisesAsync(request);
+
+                _logger.LogInformation("Successfully generated {Count} exercises", exercises.Exercises.Count);
+                return Ok(exercises);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "HTTP error while calling exercises service");
+                return StatusCode(503, new { error = "AI service temporarily unavailable. Please try again." });
+            }
+            catch (AiApiException ex)
+            {
+                _logger.LogError(ex, "AI API error while generating exercises");
+                return StatusCode(500, new { error = "Failed to generate exercises. Please try again." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error while generating exercises");
+                return StatusCode(500, new { error = "An unexpected error occurred. Please try again." });
+            }
+        }
     }
 }

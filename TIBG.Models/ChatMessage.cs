@@ -45,4 +45,94 @@ namespace TIBG.Models
         [Required]
         public string Message { get; set; } = string.Empty;
     }
+
+    // Detailed user health profile for personalized exercises
+    public class UserHealthProfile
+    {
+        // Cardiovascular
+        public bool HasHeartCondition { get; set; }
+        public string HasHighBloodPressure { get; set; } = string.Empty;
+        public string ChestPainFrequency { get; set; } = string.Empty;
+        public string BreathlessnessFrequency { get; set; } = string.Empty;
+
+        // Musculoskeletal
+        public bool HasJointProblems { get; set; }
+        public string BackPainFrequency { get; set; } = string.Empty;
+        public string JointPainFrequency { get; set; } = string.Empty;
+        public string MobilityLevel { get; set; } = string.Empty;
+
+        // Respiratory
+        public bool HasRespiratoryCondition { get; set; }
+        public string BreathingDifficulty { get; set; } = string.Empty;
+
+        // Metabolic
+        public string DiabetesStatus { get; set; } = string.Empty;
+        public string WeightCategory { get; set; } = string.Empty;
+
+        // Lifestyle
+        public string SmokingStatus { get; set; } = string.Empty;
+        public string SleepHours { get; set; } = string.Empty;
+        public string AlcoholConsumption { get; set; } = string.Empty;
+        public string DietQuality { get; set; } = string.Empty;
+
+        // Physical Activity
+        public string WeeklyExerciseFrequency { get; set; } = string.Empty;
+        public string StairsCapacity { get; set; } = string.Empty;
+        public string LastRegularExercise { get; set; } = string.Empty;
+        public string DailySittingHours { get; set; } = string.Empty;
+
+        // Mental Health
+        public string StressLevel { get; set; } = string.Empty;
+        public string AnxietyFrequency { get; set; } = string.Empty;
+        public string MotivationLevel { get; set; } = string.Empty;
+    }
+
+    public class CategoryScoreDetail
+    {
+        public string Category { get; set; } = string.Empty;
+        public string CategoryLabel { get; set; } = string.Empty;
+        public int Score { get; set; }
+        public int MaxScore { get; set; }
+        public int Percentage { get; set; }
+    }
+
+    public class ExercisesRequest
+    {
+        [Required]
+        public int ScorePercentage { get; set; }
+
+        [Required]
+        public string HealthLevel { get; set; } = string.Empty;
+
+        public List<string> WeakCategories { get; set; } = new List<string>();
+
+        public List<string> RiskFactors { get; set; } = new List<string>();
+
+        public List<string> Recommendations { get; set; } = new List<string>();
+
+        public List<CategoryScoreDetail> CategoryScores { get; set; } = new List<CategoryScoreDetail>();
+
+        public UserHealthProfile UserProfile { get; set; } = new UserHealthProfile();
+
+        public string Language { get; set; } = "fr";
+    }
+
+    public class ExerciseAi
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Duration { get; set; } = string.Empty;
+        public string Repetitions { get; set; } = string.Empty;
+        public int Sets { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Difficulty { get; set; } = string.Empty;
+        public List<string> Benefits { get; set; } = new List<string>();
+        public List<string> Instructions { get; set; } = new List<string>();
+        public List<string> Equipment { get; set; } = new List<string>();
+    }
+
+    public class ExercisesResponse
+    {
+        public List<ExerciseAi> Exercises { get; set; } = new List<ExerciseAi>();
+    }
 }

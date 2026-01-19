@@ -187,5 +187,405 @@ namespace TIBG.API.Core.DataAccess
             Ton: Encourageant, bienveillant et professionnel
             Approche: Pratique avec des exemples concrets et des étapes réalisables";
         }
+
+        public async Task<ExercisesResponse> GetRecommendedExercisesAsync(ExercisesRequest request)
+        {
+            try
+            {
+                var systemPrompt = BuildExercisesSystemPrompt(request);
+                var userMessage = BuildExercisesUserMessage(request);
+
+                var messages = new object[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userMessage }
+                };
+
+                var requestBody = new
+                {
+                    model = _modelName,
+                    messages = messages,
+                    max_completion_tokens = 2000,
+                    temperature = 0.7,
+                    top_p = 0.9,
+                    stream = false
+                };
+
+                var json = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                _logger.LogInformation("Sending exercises request to AI API with model: {Model}", _modelName);
+
+                var response = await _httpClient.PostAsync(_baseUrl, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("AI API error: {StatusCode} - {Error}", response.StatusCode, error);
+                    throw new HttpRequestException($"AI API returned {response.StatusCode}");
+                }
+
+                var responseText = await response.Content.ReadAsStringAsync();
+
+                var result = JsonSerializer.Deserialize<AiChatResponse>(responseText, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                var aiResponse = result?.Choices?.FirstOrDefault()?.Message?.Content;
+                if (string.IsNullOrWhiteSpace(aiResponse))
+                {
+                    _logger.LogError("AI API returned empty content for exercises");
+                    throw new AiApiException("AI API returned empty content");
+                }
+
+                _logger.LogInformation("Successfully received exercises response from AI API");
+
+                // Parse JSON response
+                var exercisesResponse = ParseExercisesResponse(aiResponse);
+                return exercisesResponse;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting exercises from AI API");
+                throw;
+            }
+        }
+
+        private string BuildExercisesSystemPrompt(ExercisesRequest request)
+        {
+            var languageInstruction = request.Language switch
+            {
+                "fr" => "Réponds TOUJOURS en français.",
+                "en" => "Always respond in English.",
+                _ => "Réponds TOUJOURS en français."
+            };
+
+            return $@"Tu es FytAI, un coach sportif et préparateur physique expert avec 20 ans d'expérience. Tu génères des programmes d'exercices HAUTEMENT personnalisés basés sur le profil de santé COMPLET de l'utilisateur.
+
+            {languageInstruction}
+
+            === RÈGLES STRICTES ===
+            1. Tu dois TOUJOURS répondre avec un JSON valide et rien d'autre
+            2. Le JSON doit contenir exactement 4 exercices PARFAITEMENT adaptés au profil spécifique de l'utilisateur
+            3. ANALYSE ATTENTIVEMENT chaque donnée du profil pour personnaliser les exercices
+            4. ADAPTE la difficulté, l'intensité et le type d'exercice selon:
+               - Les conditions médicales (cardio, respiratoire, articulaire, diabète)
+               - Le niveau d'activité actuel et l'historique sportif
+               - Les douleurs et limitations physiques déclarées
+               - Le mode de vie (sommeil, stress, sédentarité)
+               - Le poids et l'IMC
+            5. ÉVITE absolument les exercices contre-indiqués pour les conditions de l'utilisateur
+            6. PRIORISE les exercices qui ciblent les catégories faibles identifiées
+            7. N'utilise PAS de markdown, pas de texte explicatif, SEULEMENT le JSON
+
+            === FORMAT DE RÉPONSE (JSON STRICT) ===
+            {{
+              ""exercises"": [
+                {{
+                  ""name"": ""Nom de l'exercice"",
+                  ""description"": ""Description courte et personnalisée mentionnant pourquoi cet exercice est adapté au profil"",
+                  ""duration"": ""10-15 min"",
+                  ""repetitions"": ""10-12"",
+                  ""sets"": 3,
+                  ""category"": ""cardio|strength|flexibility|balance|breathing|relaxation|core|mobility"",
+                  ""difficulty"": ""beginner|intermediate|advanced"",
+                  ""benefits"": [""Bénéfice spécifique au profil 1"", ""Bénéfice spécifique 2"", ""Bénéfice 3""],
+                  ""instructions"": [""Étape détaillée 1"", ""Étape 2"", ""Étape 3"", ""Étape 4""],
+                  ""equipment"": [""Aucun""] ou [""Équipement nécessaire""]
+                }}
+              ]
+            }}";
+        }
+
+        private string BuildExercisesUserMessage(ExercisesRequest request)
+        {
+            var profile = request.UserProfile;
+            
+            // Build detailed category scores
+            var categoryScoresText = request.CategoryScores.Any()
+                ? string.Join("\n", request.CategoryScores.Select(cs => $"   - {cs.CategoryLabel}: {cs.Percentage}% ({cs.Score}/{cs.MaxScore})"))
+                : "   Aucun score détaillé";
+
+            var weakCategories = request.WeakCategories.Any()
+                ? string.Join(", ", request.WeakCategories)
+                : "Aucune catégorie faible identifiée";
+
+            var riskFactors = request.RiskFactors.Any()
+                ? string.Join(", ", request.RiskFactors)
+                : "Aucun facteur de risque";
+
+            var recommendations = request.Recommendations.Any()
+                ? string.Join("\n   - ", request.Recommendations.Take(5))
+                : "Suivre les conseils généraux";
+
+            // Build cardiovascular profile
+            var cardiovascularProfile = $@"
+   - Condition cardiaque: {(profile.HasHeartCondition ? "OUI - ATTENTION REQUISE" : "Non")}
+   - Hypertension: {TranslateBloodPressure(profile.HasHighBloodPressure)}
+   - Douleurs thoraciques: {TranslateFrequency(profile.ChestPainFrequency)}
+   - Essoufflement: {TranslateFrequency(profile.BreathlessnessFrequency)}";
+
+            // Build musculoskeletal profile
+            var musculoskeletalProfile = $@"
+   - Problèmes articulaires: {(profile.HasJointProblems ? "OUI - ADAPTER LES EXERCICES" : "Non")}
+   - Douleurs dorsales: {TranslateFrequency(profile.BackPainFrequency)}
+   - Douleurs articulaires: {TranslateFrequency(profile.JointPainFrequency)}
+   - Capacité de mobilité: {TranslateMobility(profile.MobilityLevel)}";
+
+            // Build respiratory profile
+            var respiratoryProfile = $@"
+   - Condition respiratoire: {(profile.HasRespiratoryCondition ? "OUI - EXERCICES DOUX RECOMMANDÉS" : "Non")}
+   - Difficultés respiratoires: {TranslateFrequency(profile.BreathingDifficulty)}";
+
+            // Build metabolic profile
+            var metabolicProfile = $@"
+   - Diabète: {TranslateDiabetes(profile.DiabetesStatus)}
+   - Catégorie de poids/IMC: {TranslateWeight(profile.WeightCategory)}";
+
+            // Build lifestyle profile
+            var lifestyleProfile = $@"
+   - Tabagisme: {TranslateSmoking(profile.SmokingStatus)}
+   - Sommeil: {TranslateSleep(profile.SleepHours)}
+   - Consommation d'alcool: {TranslateAlcohol(profile.AlcoholConsumption)}
+   - Qualité de l'alimentation: {TranslateDiet(profile.DietQuality)}";
+
+            // Build physical activity profile
+            var activityProfile = $@"
+   - Exercice hebdomadaire: {TranslateExerciseFrequency(profile.WeeklyExerciseFrequency)}
+   - Capacité à monter les escaliers: {TranslateStairs(profile.StairsCapacity)}
+   - Dernière pratique sportive régulière: {TranslateLastExercise(profile.LastRegularExercise)}
+   - Heures assis par jour: {TranslateSitting(profile.DailySittingHours)}";
+
+            // Build mental health profile
+            var mentalProfile = $@"
+   - Niveau de stress: {TranslateStress(profile.StressLevel)}
+   - Fréquence d'anxiété: {TranslateAnxiety(profile.AnxietyFrequency)}
+   - Niveau de motivation: {TranslateMotivation(profile.MotivationLevel)}";
+
+            return $@"Génère 4 exercices HAUTEMENT personnalisés pour cet utilisateur avec son profil COMPLET:
+
+=== RÉSUMÉ SANTÉ ===
+- Score global de santé: {request.ScorePercentage}%
+- Niveau de santé: {request.HealthLevel}
+- Catégories à améliorer: {weakCategories}
+- Facteurs de risque identifiés: {riskFactors}
+
+=== SCORES DÉTAILLÉS PAR CATÉGORIE ===
+{categoryScoresText}
+
+=== PROFIL CARDIOVASCULAIRE ==={cardiovascularProfile}
+
+=== PROFIL MUSCULO-SQUELETTIQUE ==={musculoskeletalProfile}
+
+=== PROFIL RESPIRATOIRE ==={respiratoryProfile}
+
+=== PROFIL MÉTABOLIQUE ==={metabolicProfile}
+
+=== MODE DE VIE ==={lifestyleProfile}
+
+=== ACTIVITÉ PHYSIQUE ACTUELLE ==={activityProfile}
+
+=== SANTÉ MENTALE ==={mentalProfile}
+
+=== RECOMMANDATIONS PERSONNALISÉES ===
+   - {recommendations}
+
+=== CONSIGNES ===
+1. Analyse CHAQUE élément du profil pour créer des exercices vraiment personnalisés
+2. ADAPTE l'intensité selon le niveau d'activité et les conditions médicales
+3. ÉVITE les exercices contre-indiqués (ex: pas de cardio intense si problème cardiaque)
+4. CIBLE les catégories faibles avec des exercices appropriés
+5. INCLUS des exercices de respiration/relaxation si stress élevé
+6. PROPOSE des exercices réalisables selon la mobilité déclarée
+
+Réponds UNIQUEMENT avec le JSON, sans aucun texte avant ou après.";
+        }
+
+        // Helper methods for translation
+        private string TranslateFrequency(string value) => value switch
+        {
+            "never" => "Jamais",
+            "rarely" => "Rarement",
+            "sometimes" => "Parfois",
+            "often" => "Souvent",
+            "chronic" => "Chronique",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateBloodPressure(string value) => value switch
+        {
+            "no" => "Non",
+            "controlled" => "Oui, contrôlée",
+            "uncontrolled" => "Oui, non contrôlée - ATTENTION",
+            "unknown" => "Inconnu",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateMobility(string value) => value switch
+        {
+            "easily" => "Bonne mobilité",
+            "difficulty" => "Mobilité limitée",
+            "no" => "Mobilité très réduite",
+            "not-tried" => "Non évalué",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateDiabetes(string value) => value switch
+        {
+            "no" => "Non",
+            "prediabetes" => "Prédiabète",
+            "type2-controlled" => "Diabète type 2 contrôlé",
+            "type2-uncontrolled" => "Diabète type 2 non contrôlé - ATTENTION",
+            "type1" => "Diabète type 1",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateWeight(string value) => value switch
+        {
+            "underweight" => "Sous-poids",
+            "normal" => "Poids normal",
+            "overweight" => "Surpoids",
+            "obese1" => "Obésité modérée",
+            "obese2" => "Obésité sévère",
+            "unknown" => "Inconnu",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateSmoking(string value) => value switch
+        {
+            "never" => "Non-fumeur",
+            "former" => "Ancien fumeur",
+            "recent-quit" => "Arrêt récent",
+            "occasional" => "Fumeur occasionnel",
+            "regular" => "Fumeur régulier",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateSleep(string value) => value switch
+        {
+            "less-5" => "Moins de 5h - INSUFFISANT",
+            "5-6" => "5-6h - Peu suffisant",
+            "7-8" => "7-8h - Optimal",
+            "9-plus" => "Plus de 9h",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateAlcohol(string value) => value switch
+        {
+            "never" => "Jamais",
+            "occasional" => "Occasionnel",
+            "moderate" => "Modéré",
+            "regular" => "Régulier",
+            "heavy" => "Excessif",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateDiet(string value) => value switch
+        {
+            "excellent" => "Excellente",
+            "good" => "Bonne",
+            "average" => "Moyenne",
+            "poor" => "Mauvaise",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateExerciseFrequency(string value) => value switch
+        {
+            "0" => "Aucun exercice - SÉDENTAIRE",
+            "1-2" => "1-2 fois/semaine",
+            "3-4" => "3-4 fois/semaine",
+            "5-plus" => "5+ fois/semaine - ACTIF",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateStairs(string value) => value switch
+        {
+            "easily" => "Facilement",
+            "moderate" => "Avec effort modéré",
+            "difficulty" => "Avec difficulté",
+            "no" => "Incapable",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateLastExercise(string value) => value switch
+        {
+            "current" => "Actuellement actif",
+            "less-month" => "Moins d'un mois",
+            "1-6-months" => "1-6 mois",
+            "6-12-months" => "6-12 mois",
+            "more-year" => "Plus d'un an - REPRISE PROGRESSIVE NÉCESSAIRE",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateSitting(string value) => value switch
+        {
+            "less-4" => "Moins de 4h",
+            "4-6" => "4-6h",
+            "6-8" => "6-8h - Sédentarité modérée",
+            "more-8" => "Plus de 8h - TRÈS SÉDENTAIRE",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateStress(string value) => value switch
+        {
+            "low" => "Faible",
+            "moderate" => "Modéré",
+            "high" => "Élevé",
+            "very-high" => "Très élevé - RELAXATION RECOMMANDÉE",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateAnxiety(string value) => value switch
+        {
+            "never" => "Jamais",
+            "few-days" => "Quelques jours",
+            "more-half" => "Plus de la moitié du temps",
+            "nearly-every" => "Presque tous les jours",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateMotivation(string value) => value switch
+        {
+            "always" => "Toujours motivé",
+            "usually" => "Généralement motivé",
+            "sometimes" => "Parfois motivé",
+            "rarely" => "Rarement motivé - EXERCICES FACILES RECOMMANDÉS",
+            _ => "Non renseigné"
+        };
+
+        private ExercisesResponse ParseExercisesResponse(string aiResponse)
+        {
+            try
+            {
+                // Clean up the response - remove markdown code blocks if present
+                var cleanedResponse = aiResponse.Trim();
+                if (cleanedResponse.StartsWith("```json"))
+                {
+                    cleanedResponse = cleanedResponse.Substring(7);
+                }
+                if (cleanedResponse.StartsWith("```"))
+                {
+                    cleanedResponse = cleanedResponse.Substring(3);
+                }
+                if (cleanedResponse.EndsWith("```"))
+                {
+                    cleanedResponse = cleanedResponse.Substring(0, cleanedResponse.Length - 3);
+                }
+                cleanedResponse = cleanedResponse.Trim();
+
+                var result = JsonSerializer.Deserialize<ExercisesResponse>(cleanedResponse, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                return result ?? new ExercisesResponse();
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to parse exercises JSON response: {Response}", aiResponse);
+                return new ExercisesResponse();
+            }
+        }
     }
 }
