@@ -49,17 +49,33 @@ namespace TIBG.Models
     // Detailed user health profile for personalized exercises
     public class UserHealthProfile
     {
+        // Personal Info
+        public string AgeRange { get; set; } = string.Empty;
+        public string Medications { get; set; } = string.Empty;
+
         // Cardiovascular
         public bool HasHeartCondition { get; set; }
+        public bool HasFamilyHeartHistory { get; set; }
         public string HasHighBloodPressure { get; set; } = string.Empty;
         public string ChestPainFrequency { get; set; } = string.Empty;
         public string BreathlessnessFrequency { get; set; } = string.Empty;
+
+        // Cardio Endurance (physical tests)
+        public string CardioEndurance { get; set; } = string.Empty;
 
         // Musculoskeletal
         public bool HasJointProblems { get; set; }
         public string BackPainFrequency { get; set; } = string.Empty;
         public string JointPainFrequency { get; set; } = string.Empty;
         public string MobilityLevel { get; set; } = string.Empty;
+
+        // Physical Fitness Tests
+        public string SquatAbility { get; set; } = string.Empty;
+        public string OverheadLiftAbility { get; set; } = string.Empty;
+        public string CarryingAbility { get; set; } = string.Empty;
+        public string BalanceLevel { get; set; } = string.Empty;
+        public string SittingRisingAbility { get; set; } = string.Empty;
+        public string GripStrength { get; set; } = string.Empty;
 
         // Respiratory
         public bool HasRespiratoryCondition { get; set; }
@@ -68,6 +84,9 @@ namespace TIBG.Models
         // Metabolic
         public string DiabetesStatus { get; set; } = string.Empty;
         public string WeightCategory { get; set; } = string.Empty;
+        public double? HeightCm { get; set; }
+        public double? WeightKg { get; set; }
+        public double? Bmi { get; set; }
 
         // Lifestyle
         public string SmokingStatus { get; set; } = string.Empty;

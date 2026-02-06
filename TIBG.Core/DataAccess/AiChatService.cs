@@ -204,15 +204,20 @@ namespace TIBG.API.Core.DataAccess
             - Répondre aux questions sur les résultats du questionnaire de santé
             - Expliquer le score et le niveau de santé de manière bienveillante
             - Donner des conseils pratiques et personnalisés pour améliorer les catégories faibles
-            - Guider l'utilisateur sur les exercices recommandés
+            - Guider l'utilisateur sur les exercices recommandés (endurance cardio-vasculaire, renforcement musculaire, équilibre, souplesse)
             - Motiver et encourager l'utilisateur dans sa démarche de santé
             - Être empathique, professionnel et encourageant
             - Garder les réponses concises (2-4 paragraphes maximum)
             - Toujours rappeler de consulter un professionnel de santé pour des problèmes médicaux
+            - Lorsque la question concerne le cardio, expliquer l'importance de l'endurance cardio-vasculaire (base pour le cœur, les poumons et la circulation) et recommander des données objectifs mesurables (fréquence cardiaque, capacité d'effort)
+            - Pour les questions musculaires, mentionner les recommandations OMS (2x/semaine renforcement musculaire) et proposer des tests simples (squat, porter une charge, dead hang)
+            - Pour les questions métaboliques, expliquer l'IMC si pertinent (poids en kg divisé par taille en m², normal entre 18.5 et 25)
+            - Pour les questions sur l'alimentation, détailler les recommandations (fruits/légumes, protéines, hydratation, limiter ultra-transformés)
+            - Pour les personnes âgées, mentionner les tests d'équilibre (lever de chaise, test de Tinetti, test de Berg, sitting rising test) comme indicateurs de risque de chute
 
             === STYLE DE COMMUNICATION ===
             Ton: Encourageant, bienveillant et professionnel
-            Approche: Pratique avec des exemples concrets et des étapes réalisables";
+            Approche: Pratique avec des exemples concrets, des critères quantifiables et des étapes réalisables";
         }
 
         public async Task<ExercisesResponse> GetRecommendedExercisesAsync(ExercisesRequest request)
@@ -348,10 +353,14 @@ namespace TIBG.API.Core.DataAccess
 
             // Build cardiovascular profile
             var cardiovascularProfile = $@"
+   - Tranche d'âge: {TranslateAge(profile.AgeRange)}
+   - Médicaments: {TranslateMedications(profile.Medications)}
    - Condition cardiaque: {(profile.HasHeartCondition ? "OUI - ATTENTION REQUISE" : "Non")}
+   - Antécédents familiaux cardiaques: {(profile.HasFamilyHeartHistory ? "OUI - FACTEUR DE RISQUE" : "Non")}
    - Hypertension: {TranslateBloodPressure(profile.HasHighBloodPressure)}
    - Douleurs thoraciques: {TranslateFrequency(profile.ChestPainFrequency)}
-   - Essoufflement: {TranslateFrequency(profile.BreathlessnessFrequency)}";
+   - Essoufflement: {TranslateFrequency(profile.BreathlessnessFrequency)}
+   - Endurance cardio-vasculaire: {TranslateCardioEndurance(profile.CardioEndurance)}";
 
             // Build musculoskeletal profile
             var musculoskeletalProfile = $@"
@@ -360,15 +369,30 @@ namespace TIBG.API.Core.DataAccess
    - Douleurs articulaires: {TranslateFrequency(profile.JointPainFrequency)}
    - Capacité de mobilité: {TranslateMobility(profile.MobilityLevel)}";
 
+            // Build physical fitness tests profile
+            var fitnessTestsProfile = $@"
+   - Capacité de squat: {TranslateFitnessAbility(profile.SquatAbility)}
+   - Lever charge au-dessus de la tête (10kg): {TranslateFitnessAbility(profile.OverheadLiftAbility)}
+   - Port de courses sur 100m: {TranslateFitnessAbility(profile.CarryingAbility)}
+   - Niveau d'équilibre: {TranslateBalanceLevel(profile.BalanceLevel)}
+   - Sitting Rising Test (se relever du sol): {TranslateFitnessAbility(profile.SittingRisingAbility)}
+   - Force de préhension (Dead Hang/Grip): {TranslateGripStrength(profile.GripStrength)}";
+
             // Build respiratory profile
             var respiratoryProfile = $@"
    - Condition respiratoire: {(profile.HasRespiratoryCondition ? "OUI - EXERCICES DOUX RECOMMANDÉS" : "Non")}
    - Difficultés respiratoires: {TranslateFrequency(profile.BreathingDifficulty)}";
 
             // Build metabolic profile
+            var bmiInfo = profile.Bmi.HasValue ? $"{profile.Bmi.Value:F1}" : "Non renseigné";
+            var heightInfo = profile.HeightCm.HasValue ? $"{profile.HeightCm.Value} cm" : "Non renseigné";
+            var weightInfo = profile.WeightKg.HasValue ? $"{profile.WeightKg.Value} kg" : "Non renseigné";
             var metabolicProfile = $@"
    - Diabète: {TranslateDiabetes(profile.DiabetesStatus)}
-   - Catégorie de poids/IMC: {TranslateWeight(profile.WeightCategory)}";
+   - Catégorie de poids/IMC: {TranslateWeight(profile.WeightCategory)}
+   - IMC calculé: {bmiInfo} (normal: 18.5-25, surpoids: 25-30, obésité: >30)
+   - Taille: {heightInfo}
+   - Poids: {weightInfo}";
 
             // Build lifestyle profile
             var lifestyleProfile = $@"
@@ -405,6 +429,8 @@ namespace TIBG.API.Core.DataAccess
 
 === PROFIL MUSCULO-SQUELETTIQUE ==={musculoskeletalProfile}
 
+=== TESTS DE CONDITION PHYSIQUE ==={fitnessTestsProfile}
+
 === PROFIL RESPIRATOIRE ==={respiratoryProfile}
 
 === PROFIL MÉTABOLIQUE ==={metabolicProfile}
@@ -425,6 +451,10 @@ namespace TIBG.API.Core.DataAccess
 4. CIBLE les catégories faibles avec des exercices appropriés
 5. INCLUS des exercices de respiration/relaxation si stress élevé
 6. PROPOSE des exercices réalisables selon la mobilité déclarée
+7. Pour les catégories cardio, inclure de l'endurance cardio-vasculaire (base pour le cœur, poumons et circulation)
+8. Pour les muscles, suivre les recommandations OMS (2x/semaine renforcement musculaire) et adapter selon les tests physiques
+9. Pour les personnes âgées (60+), intégrer des exercices de prévention des chutes (équilibre, lever de chaise)
+10. Si l'IMC est disponible, adapter l'intensité en conséquence
 
 Réponds UNIQUEMENT avec le JSON, sans aucun texte avant ou après.";
         }
@@ -578,6 +608,71 @@ Réponds UNIQUEMENT avec le JSON, sans aucun texte avant ou après.";
             "usually" => "Généralement motivé",
             "sometimes" => "Parfois motivé",
             "rarely" => "Rarement motivé - EXERCICES FACILES RECOMMANDÉS",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateAge(string value) => value switch
+        {
+            "18-29" => "18-29 ans",
+            "30-39" => "30-39 ans",
+            "40-49" => "40-49 ans",
+            "50-59" => "50-59 ans",
+            "60-69" => "60-69 ans - ADAPTER LES EXERCICES",
+            "70-plus" => "70+ ans - PRÉVENTION DES CHUTES PRIORITAIRE",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateMedications(string value) => value switch
+        {
+            "none" => "Aucun médicament",
+            "vitamins" => "Vitamines/compléments uniquement",
+            "one" => "Un médicament régulier",
+            "multiple" => "Plusieurs médicaments - VÉRIFIER CONTRE-INDICATIONS",
+            "many" => "Nombreux médicaments - ATTENTION PARTICULIÈRE REQUISE",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateCardioEndurance(string value) => value switch
+        {
+            "excellent" => "Excellente - Capable d'effort soutenu 30+ min",
+            "good" => "Bonne - Effort modéré sans difficulté",
+            "average" => "Moyenne - S'essouffle après 10-15 min",
+            "poor" => "Faible - S'essouffle rapidement",
+            "very-poor" => "Très faible - REPRENDRE PROGRESSIVEMENT",
+            _ => "Non évaluée"
+        };
+
+        private string TranslateFitnessAbility(string value) => value switch
+        {
+            "easily" => "Facilement",
+            "with-effort" => "Avec effort",
+            "difficulty" => "Avec difficulté",
+            "unable" => "Incapable",
+            "not-tested" => "Non testé",
+            "yes" => "Oui",
+            "no" => "Non",
+            _ => "Non évalué"
+        };
+
+        private string TranslateBalanceLevel(string value) => value switch
+        {
+            "excellent" => "Excellent - Tenue unipode 30+ sec",
+            "good" => "Bon - Équilibre stable",
+            "moderate" => "Modéré - Quelques déséquilibres",
+            "poor" => "Faible - RISQUE DE CHUTE",
+            "very-poor" => "Très faible - RISQUE DE CHUTE ÉLEVÉ",
+            "not-tested" => "Non évalué",
+            _ => "Non renseigné"
+        };
+
+        private string TranslateGripStrength(string value) => value switch
+        {
+            "excellent" => "Excellente - Dead hang 60+ sec",
+            "good" => "Bonne - Dead hang 30-60 sec",
+            "average" => "Moyenne - Dead hang 15-30 sec",
+            "poor" => "Faible - Dead hang < 15 sec",
+            "unable" => "Incapable de s'accrocher",
+            "not-tested" => "Non évalué",
             _ => "Non renseigné"
         };
 
