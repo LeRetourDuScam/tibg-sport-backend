@@ -133,11 +133,25 @@ builder.Services.AddDbContext<FytAiDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
-builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
-builder.Services.AddScoped<IChatService, AiChatService>();
-builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+// Authentication & User Services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+
+// Feedback Services
+builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
+builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+
+// AI Chat Services
+builder.Services.AddScoped<IChatService, AiChatService>();
+
+// Carbon Footprint Services - Ingredients
+builder.Services.AddScoped<IIngredientRepository, IngredientRepository>();
+builder.Services.AddScoped<IIngredientService, IngredientService>();
+builder.Services.AddScoped<IExternalIngredientService, ExternalIngredientService>();
+
+// Carbon Footprint Services - Recipes
+builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
+builder.Services.AddScoped<IRecipeService, RecipeService>();
 
 builder.Services.AddOpenApi();
 
