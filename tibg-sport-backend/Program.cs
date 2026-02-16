@@ -153,12 +153,32 @@ builder.Services.AddScoped<IExternalIngredientService, ExternalIngredientService
 builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 
+// Alternatives & Nutrition Services
+builder.Services.AddHttpClient<IAlternativesService, AlternativesService>();
+builder.Services.AddScoped<INutritionService, NutritionService>();
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Seed database with ingredient data
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<FytAiDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await dbContext.Database.MigrateAsync();
+        await IngredientDataSeeder.SeedAsync(dbContext, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error during database migration/seeding");
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {

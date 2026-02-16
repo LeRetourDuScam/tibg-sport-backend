@@ -149,12 +149,14 @@ namespace tibg_sport_backend.Controllers
 
                 var result = await _ingredientService.SearchAsync(request);
 
-                // Return only essential fields for autocomplete
+                // Return essential fields for autocomplete (includes season & CO2 for UI)
                 var suggestions = result.Ingredients.Select(i => new
                 {
                     i.Id,
                     i.Name,
-                    i.Category
+                    i.Category,
+                    i.Season,
+                    i.CarbonEmissionKgPerKg
                 }).ToList();
 
                 return Ok(new { data = suggestions });
