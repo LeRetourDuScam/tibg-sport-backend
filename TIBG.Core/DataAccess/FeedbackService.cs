@@ -25,8 +25,8 @@ namespace TIBG.API.Core.DataAccess
             {
                 await _repository.AddAsync(feedback);
                 
-                _logger.LogInformation("Feedback saved successfully: Rating={Rating}, Sport={Sport}", 
-                    feedback.Rating, feedback.Sport);
+                _logger.LogInformation("Feedback saved successfully: Rating={Rating}, Context={Context}", 
+                    feedback.Rating, feedback.Context);
                 
                 return true;
             }

@@ -39,11 +39,6 @@ namespace tibg_sport_backend.Controllers
                 return BadRequest(new { error = "Rating is required" });
             }
 
-            if (string.IsNullOrWhiteSpace(feedback.Sport))
-            {
-                return BadRequest(new { error = "Sport is required" });
-            }
-
             var validRatings = new[] { "perfect", "good", "meh", "bad" };
             if (!validRatings.Contains(feedback.Rating.ToLower()))
             {

@@ -191,7 +191,7 @@ Quelles alternatives plus durables peux-tu suggérer ?";
 
             var requestBody = new
             {
-                model = _aiSettings.Model,
+                model = _aiSettings.ModelName,
                 messages = new[]
                 {
                     new { role = "system", content = systemPrompt },
@@ -207,7 +207,7 @@ Quelles alternatives plus durables peux-tu suggérer ?";
             _httpClient.DefaultRequestHeaders.Clear();
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_aiSettings.ApiKey}");
 
-            var response = await _httpClient.PostAsync(_aiSettings.ApiUrl, content);
+            var response = await _httpClient.PostAsync(_aiSettings.BaseUrl, content);
 
             if (!response.IsSuccessStatusCode)
             {

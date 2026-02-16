@@ -27,8 +27,8 @@ namespace TIBG.API.Core.DataAccess
                 _context.Feedbacks.Add(feedback);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation("Feedback added to database: Id={Id}, Sport={Sport}", 
-                    feedback.Id, feedback.Sport);
+                _logger.LogInformation("Feedback added to database: Id={Id}, Context={Context}", 
+                    feedback.Id, feedback.Context);
                 
                 return feedback;
             }
@@ -96,7 +96,7 @@ namespace TIBG.API.Core.DataAccess
             try
             {
                 return await _context.Feedbacks
-                    .Where(f => f.Sport.ToLower() == sport.ToLower())
+                    .Where(f => f.Context != null && f.Context.ToLower() == sport.ToLower())
                     .OrderByDescending(f => f.CreatedAt)
                     .ToListAsync();
             }
@@ -112,7 +112,7 @@ namespace TIBG.API.Core.DataAccess
             try
             {
                 var feedbacks = await _context.Feedbacks
-                    .Where(f => f.Sport.ToLower() == sport.ToLower())
+                    .Where(f => f.Context != null && f.Context.ToLower() == sport.ToLower())
                     .ToListAsync();
 
                 if (!feedbacks.Any())
