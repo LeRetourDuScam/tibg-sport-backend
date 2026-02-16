@@ -46,16 +46,28 @@ namespace TIBG.API.Core.DataAccess
                 return cached!;
             }
 
-            var ingredient = await _ingredientRepository.GetByIdAsync(ingredientId);
-            if (ingredient == null)
+            try
             {
-                throw new ArgumentException($"Ingredient with ID {ingredientId} not found");
+                var ingredient = await _ingredientRepository.GetByIdAsync(ingredientId);
+                if (ingredient == null)
+                {
+                    throw new ArgumentException($"Ingredient with ID {ingredientId} not found. The database may be empty or not seeded.");
+                }
+
+                var response = await BuildAlternatives(ingredient);
+
+                _cache.Set(cacheKey, response, CacheDuration);
+                return response;
             }
-
-            var response = await BuildAlternatives(ingredient);
-
-            _cache.Set(cacheKey, response, CacheDuration);
-            return response;
+            catch (ArgumentException)
+            {
+                throw; // Re-throw ArgumentException to be handled as 404
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database error while getting ingredient {Id}. Ensure database is connected and seeded.", ingredientId);
+                throw new InvalidOperationException($"Failed to retrieve ingredient {ingredientId} from database. Database may not be seeded or connection failed.", ex);
+            }
         }
 
         public async Task<AlternativeSuggestionsResponse> GetAlternativesByNameAsync(string ingredientName, string? category = null)

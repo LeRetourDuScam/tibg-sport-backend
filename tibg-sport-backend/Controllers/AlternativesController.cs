@@ -36,12 +36,18 @@ namespace tibg_sport_backend.Controllers
             }
             catch (ArgumentException ex)
             {
+                _logger.LogWarning("Ingredient not found: {Id}", id);
                 return NotFound(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Database operation failed for ingredient {Id}", id);
+                return StatusCode(500, new { error = "Database error. Please ensure the database is seeded with ingredients.", details = ex.Message });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting alternatives for ingredient {Id}", id);
-                return StatusCode(500, new { error = "An error occurred while getting alternative suggestions" });
+                _logger.LogError(ex, "Error getting alternatives for ingredient {Id}. Message: {Message}", id, ex.Message);
+                return StatusCode(500, new { error = "An error occurred while getting alternative suggestions", details = ex.Message });
             }
         }
 

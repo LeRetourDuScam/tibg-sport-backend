@@ -92,22 +92,31 @@ namespace TIBG.API.Core.DataAccess
                 var user = await _context.Users
                     .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
-                if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
+                if (user == null)
                 {
-                    _logger.LogWarning("Failed login attempt");
+                    _logger.LogWarning("Failed login attempt - user not found for email: {Email}", request.Email);
+                    return null;
+                }
+
+                _logger.LogInformation("Login attempt for user {UserId}. Password length: {PwdLength}, Hash length: {HashLength}", 
+                    user.Id, request.Password?.Length ?? 0, user.PasswordHash?.Length ?? 0);
+
+                if (!VerifyPassword(request.Password, user.PasswordHash))
+                {
+                    _logger.LogWarning("Failed login attempt - password verification failed for user {UserId}", user.Id);
                     return null;
                 }
 
                 if (!user.IsActive)
                 {
-                    _logger.LogWarning("Login attempt for inactive user");
+                    _logger.LogWarning("Login attempt for inactive user {UserId}", user.Id);
                     return null;
                 }
 
                 user.LastLoginAt = DateTime.UtcNow;
 
                 var oldTokens = await _context.RefreshTokens
-                    .Where(t => t.UserId == user.Id && t.IsActive)
+                    .Where(t => t.UserId == user.Id && t.RevokedAt == null && t.ExpiresAt > DateTime.UtcNow)
                     .OrderByDescending(t => t.CreatedAt)
                     .Skip(4)
                     .ToListAsync();
