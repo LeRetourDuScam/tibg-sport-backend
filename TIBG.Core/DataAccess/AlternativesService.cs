@@ -56,7 +56,10 @@ namespace TIBG.API.Core.DataAccess
 
                 var response = await BuildAlternatives(ingredient);
 
-                _cache.Set(cacheKey, response, CacheDuration);
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(CacheDuration)
+                    .SetSize(1);
+                _cache.Set(cacheKey, response, cacheOptions);
                 return response;
             }
             catch (ArgumentException)
@@ -96,7 +99,10 @@ namespace TIBG.API.Core.DataAccess
 
             var response = await BuildAlternatives(ingredient);
 
-            _cache.Set(cacheKey, response, CacheDuration);
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(CacheDuration)
+                .SetSize(1);
+            _cache.Set(cacheKey, response, cacheOptions);
             return response;
         }
 
